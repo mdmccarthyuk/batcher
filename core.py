@@ -14,13 +14,16 @@ class BatcherDaemon(Daemon):
     main(None)
 
 def main(args):
-  global taskList,taskStatus
+  global taskList,taskStatus,checkRunning,checkResult
 
   taskCount = 0
   taskMax = 1
   taskList = dict()
   taskStatus = dict()
   taskRunning = dict()
+  hostList = dict()
+  checkRunning = dict()
+  checkResult = dict()
 
   while True:
     print "main> Heartbeat"
@@ -32,7 +35,7 @@ def main(args):
           taskCount = taskCount+1
           taskStatus[task[0]]='STARTED'
           print "main> init: %s" % task[0]
-          taskRunning[task[0]] = Popen([task[2]],stdout=PIPE,stderr=PIPE)
+          taskRunning[task[0]] = Popen(task[2],shell=True,stdout=PIPE,stderr=PIPE)
         else:
           print "main> waiting for worker: %s" % task[0]
       else:
@@ -50,7 +53,10 @@ def main(args):
             print "main> ------------------"
             taskCount = taskCount - 1
             task_done(task[0])
-           
+    hosts = worker_getHosts()
+    for host in hosts:
+      host_checkLoad(host[1])
+       
     time.sleep(5)    
 
 def check_for_db():
@@ -63,6 +69,20 @@ def check_for_db():
   c.execute(sql)
   conn.commit() 
   conn.close()
+
+def worker_getHosts():
+  global hostList
+  conn = sqlite3.connect('/var/run/batcher/core.db')
+  sql = 'select * from hosts'
+  c = conn.cursor()
+  c.execute(sql)
+  hosts = []
+  row = c.fetchone()
+  while row is not None:
+    hosts.append(row)
+    row = c.fetchone()
+  conn.close()
+  return hosts
 
 def worker_getTasks():
   global taskList,taskStatus
@@ -175,9 +195,31 @@ def host_list():
 def host_add(hostname):
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  c.execute('INSERT into hosts (hostname, access, user) values (?, \'ssh\', \'mikmcc\')', (hostname,))
-  conn.commit()
   conn.close()
+
+def host_checkLoad(hostname):
+  global checkRunning,checkResult
+  command = "ssh %s 'cat /proc/loadavg /proc/stat'" % hostname
+  if hostname not in checkRunning:
+    print "host_checkLoad> %s check triggered" % hostname
+    checkRunning[hostname]=Popen(command,stdout=PIPE,stderr=PIPE,shell=True)
+  else:
+    taskproc = checkRunning[hostname]
+    retcode = taskproc.poll()
+    if retcode is not None:
+      checkResult[hostname] = taskproc.stdout.read()
+      del checkRunning[hostname]
+      lines = checkResult[hostname].split('\n')
+      loads = lines[0].split()
+      cpustat = lines[1].split()
+      cpuTotal = eval("%s+%s+%s+%s+%s+%s+%s" % (cpustat[1],cpustat[2],cpustat[3],cpustat[4],cpustat[5],cpustat[6],cpustat[7]))
+      cpuWait = float(cpustat[5])/cpuTotal 
+      print "host_checkLoad> %s load is %s" % (hostname,loads[0])
+      print "host_checkLoad> %s IOWait is %s" % (hostname,cpuWait)
+      if float(loads[0]) > 0.10:
+        print "host_checkLoad> %s load is over threshold" % hostname
+    else:
+      print "host_checkLoad> %s check still running" % hostname
 
 if __name__ == "__main__":
   workerStatus="START"

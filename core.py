@@ -20,25 +20,38 @@ def main(args):
   taskMax = 1
   taskList = dict()
   taskStatus = dict()
+  taskRunning = dict()
 
   while True:
-    with open('/var/run/batcher/heartbeat', 'a'):
-      os.utime('/var/run/batcher/heartbeat', None)
     print "main> Heartbeat"
     tasks = worker_getTasks()
     for task in tasks:
-      print "main> task: %s - %s" % (task[0],task[2])
+      print "main> task: %s %s - %s" % (task[0],taskStatus[task[0]],task[2])
       if taskStatus[task[0]] == 'init':
         if taskCount < taskMax:
           taskCount = taskCount+1
-          taskStatus[task[0]]='started'
+          taskStatus[task[0]]='STARTED'
           print "main> init: %s" % task[0]
+          taskRunning[task[0]] = Popen([task[2]],stdout=PIPE,stderr=PIPE)
         else:
           print "main> waiting for worker: %s" % task[0]
       else:
-        print "main> already init: %s" % task[0]
-        
-    time.sleep(10)    
+        if taskStatus[task[0]] == 'STARTED':
+          taskproc = taskRunning[task[0]]
+          retcode = taskproc.poll()
+          if retcode is not None:
+            print "main> task done %s (%s) - return: %s" % (task[0], task[2], retcode)
+            del taskRunning[task[0]]
+            taskStatus[task[0]]='DONE'
+            print "main> ----- STDOUT -----"
+            print taskproc.stdout.read()
+            print "main> ----- STDERR -----"
+            print taskproc.stderr.read()
+            print "main> ------------------"
+            taskCount = taskCount - 1
+            task_done(task[0])
+           
+    time.sleep(5)    
 
 def check_for_db():
   conn = sqlite3.connect('/var/run/batcher/core.db')
@@ -60,8 +73,6 @@ def worker_getTasks():
   tasks = []
   row = c.fetchone()
   while row is not None:
-    print row
-    print row[2]
     if row[0] not in taskList: 
       taskList[row[0]] = row[2]
       taskStatus[row[0]] = row[1]
@@ -142,6 +153,13 @@ def task_add(task,host):
   c.execute('INSERT INTO tasks (status, task, host) values (\'init\', ?, ?)', (task, host,))
   conn.commit() 
   conn.close()  
+
+def task_done(task):
+  conn = sqlite3.connect('/var/run/batcher/core.db')
+  c = conn.cursor()
+  c.execute('UPDATE tasks SET status=\'DONE\' WHERE id = ?', (task,))
+  conn.commit()
+  conn.close()
 
 def host_list():
   conn = sqlite3.connect('/var/run/batcher/core.db')

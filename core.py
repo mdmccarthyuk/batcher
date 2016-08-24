@@ -1,10 +1,6 @@
 #!/usr/bin/python
 
-import sys
-import time
-import argparse
-import sqlite3
-import os
+import sys, time, argparse, sqlite3, os
 from subprocess import Popen, PIPE
 from daemon import Daemon
 
@@ -14,7 +10,11 @@ class BatcherDaemon(Daemon):
     main(None)
 
 def main(args):
-  global taskList,taskStatus,checkRunning,checkResult
+  global taskList,taskStatus,checkRunning,checkResult,debugFlag,hostAccess,taskRunning
+
+  if args.debug is True:
+    debugFlag = True
+    print "DEBUG"
 
   taskCount = 0
   taskMax = 1
@@ -22,20 +22,25 @@ def main(args):
   taskStatus = dict()
   taskRunning = dict()
   hostList = dict()
+  hostAccess = dict()
   checkRunning = dict()
   checkResult = dict()
 
   while True:
     print "main> Heartbeat"
+
+    hosts = worker_getHosts()
+    for host in hosts:
+      hostAccess[host[1]] = [ host[2], host[3] ]
+      host_checkLoad(host[1])
+
     tasks = worker_getTasks()
     for task in tasks:
       print "main> task: %s %s - %s" % (task[0],taskStatus[task[0]],task[2])
       if taskStatus[task[0]] == 'init':
         if taskCount < taskMax:
-          taskCount = taskCount+1
-          taskStatus[task[0]]='STARTED'
-          print "main> init: %s" % task[0]
-          taskRunning[task[0]] = Popen(task[2],shell=True,stdout=PIPE,stderr=PIPE)
+          taskCount += 1
+          task_init(task[0],task[2],task[4])
         else:
           print "main> waiting for worker: %s" % task[0]
       else:
@@ -51,11 +56,8 @@ def main(args):
             print "main> ----- STDERR -----"
             print taskproc.stderr.read()
             print "main> ------------------"
-            taskCount = taskCount - 1
+            taskCount -= 1
             task_done(task[0])
-    hosts = worker_getHosts()
-    for host in hosts:
-      host_checkLoad(host[1])
        
     time.sleep(5)    
 
@@ -174,6 +176,20 @@ def task_add(task,host):
   conn.commit() 
   conn.close()  
 
+def task_init(task,cmd,host):
+  global taskStatus,taskRunning,hostAccess
+  if hostAccess[host][0] == "ssh":
+    command = "ssh %s@%s '%s'" % (hostAccess[host][1],host,cmd)
+  elif hostAccess[host][0] == "local":
+    command = cmd  
+  else:
+    print "task_init> hostAccess method invalid"
+    sys.exit(1)
+  print "task_init> task %s - %s starting" % (task, cmd)
+  taskRunning[task] = Popen(command,shell=True,stdout=PIPE,stderr=PIPE)
+  taskStatus[task] = "STARTED"
+  print "task_init> task %s - %s started" % (task, cmd)
+
 def task_done(task):
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
@@ -198,8 +214,17 @@ def host_add(hostname):
   conn.close()
 
 def host_checkLoad(hostname):
-  global checkRunning,checkResult
-  command = "ssh %s 'cat /proc/loadavg /proc/stat'" % hostname
+  global checkRunning,checkResult,hostAccess
+  if hostAccess[hostname][0] == "ssh":
+    command = "ssh %s@%s 'cat /proc/loadavg /proc/stat'" % (hostAccess[hostname][1],hostname)
+    print "host_checkLoad> ssh method"
+  elif hostAccess[hostname][0] == "local":
+    command = "cat /proc/loadavg /proc/stat"
+    print "host_checkLoad> local method"
+  else:
+    print "host_checkLoad> Unknown access method"
+    sys.exit(1)
+  
   if hostname not in checkRunning:
     print "host_checkLoad> %s check triggered" % hostname
     checkRunning[hostname]=Popen(command,stdout=PIPE,stderr=PIPE,shell=True)
@@ -223,11 +248,13 @@ def host_checkLoad(hostname):
 
 if __name__ == "__main__":
   workerStatus="START"
+  debugFlag = False
   check_for_db()
   parser = argparse.ArgumentParser(description="Batcher core")
   subparsers = parser.add_subparsers()
 
   parser_standalone = subparsers.add_parser('standalone')
+  parser_standalone.add_argument('-d', '--debug',action='store_true')
   parser_standalone.set_defaults(func=main)
 
   parser_daemon = subparsers.add_parser('service')

@@ -12,7 +12,7 @@ class BatcherDaemon(Daemon):
     main(None)
 
 def main(args):
-  global taskStatus,checkRunning,checkResult,debugFlag,hostAccess,taskRunning,hostList,runningTasks
+  global checkRunning,checkResult,debugFlag,hostList,runningTasks
 
   if args.debug is True:
     debugFlag = True
@@ -21,24 +21,19 @@ def main(args):
   runningTasks = dict()
   taskCount = 0
   taskMax = 1
-  taskStatus = dict()
-  taskRunning = dict()
   hostList = dict()
-  hostAccess = dict()
   checkRunning = dict()
   checkResult = dict()
 
   while True:
     print "main> Heartbeat"
 
-    hosts = worker_getHosts()
+    worker_getHosts()
     worker_getTasks()
-    for host in hosts:
-      hostAccess[host[1]] = [ host[2], host[3] ]
 
     for host in hostList:
       print "HOST: %s = %s (%s)" % (host, hostList[host].name, hostList[host].method)
-      host_checkLoad(hostList[host].name)
+      host_checkLoad(hostList[host])
 
     completeTasks=[]
     for task in runningTasks:
@@ -84,11 +79,8 @@ def worker_getHosts():
   sql = 'select * from hosts'
   c = conn.cursor()
   c.execute(sql)
-  hosts = []
   row = c.fetchone()
   while row is not None:
-    hosts.append(row)
-    print row[1]
     if row[1] not in hostList:
       newHost = Host(row[1])
       if row[2] == 'ssh':
@@ -96,10 +88,9 @@ def worker_getHosts():
       hostList[row[1]]=newHost
     row = c.fetchone()
   conn.close()
-  return hosts
 
 def worker_getTasks():
-  global taskList,taskStatus,runningTasks
+  global taskList,runningTasks
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
   sql = 'SELECT id,status,task,time,host,pid FROM tasks WHERE NOT status=\'DONE\''
@@ -221,38 +212,36 @@ def host_add(hostname,method,user):
   conn.commit()
   conn.close()
 
-def host_checkLoad(hostname):
-  global checkRunning,checkResult,hostAccess
-  if hostAccess[hostname][0] == "ssh":
-    command = "ssh %s@%s 'cat /proc/loadavg /proc/stat'" % (hostAccess[hostname][1],hostname)
-    print "host_checkLoad> ssh method"
-  elif hostAccess[hostname][0] == "local":
+def host_checkLoad(host):
+  global checkRunning,checkResult
+  if host.method == "ssh":
+    command = "ssh %s@%s 'cat /proc/loadavg /proc/stat'" % (host.user,host.name)
+  elif host.method == "local":
     command = "cat /proc/loadavg /proc/stat"
-    print "host_checkLoad> local method"
   else:
     print "host_checkLoad> Unknown access method"
     sys.exit(1)
   
-  if hostname not in checkRunning:
-    print "host_checkLoad> %s check triggered" % hostname
-    checkRunning[hostname]=Popen(command,stdout=PIPE,stderr=PIPE,shell=True)
+  if host.name not in checkRunning:
+    print "host_checkLoad> %s check triggered" % host.name
+    checkRunning[host.name]=Popen(command,stdout=PIPE,stderr=PIPE,shell=True)
   else:
-    taskproc = checkRunning[hostname]
+    taskproc = checkRunning[host.name]
     retcode = taskproc.poll()
     if retcode is not None:
-      checkResult[hostname] = taskproc.stdout.read()
-      del checkRunning[hostname]
-      lines = checkResult[hostname].split('\n')
+      checkResult[host.name] = taskproc.stdout.read()
+      del checkRunning[host.name]
+      lines = checkResult[host.name].split('\n')
       loads = lines[0].split()
       cpustat = lines[1].split()
       cpuTotal = eval("%s+%s+%s+%s+%s+%s+%s" % (cpustat[1],cpustat[2],cpustat[3],cpustat[4],cpustat[5],cpustat[6],cpustat[7]))
       cpuWait = float(cpustat[5])/cpuTotal 
-      print "host_checkLoad> %s load is %s" % (hostname,loads[0])
-      print "host_checkLoad> %s IOWait is %s" % (hostname,cpuWait)
+      print "host_checkLoad> %s load is %s" % (host.name,loads[0])
+      print "host_checkLoad> %s IOWait is %s" % (host.name,cpuWait)
       if float(loads[0]) > 0.10:
-        print "host_checkLoad> %s load is over threshold" % hostname
+        print "host_checkLoad> %s load is over threshold" % host.name
     else:
-      print "host_checkLoad> %s check still running" % hostname
+      print "host_checkLoad> %s check still running" % host.name
 
 if __name__ == "__main__":
   workerStatus="START"

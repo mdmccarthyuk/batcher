@@ -3,6 +3,7 @@
 import sys, time, argparse, sqlite3, os
 from subprocess import Popen, PIPE
 from daemon import Daemon
+from task import TaskRunner
 
 class BatcherDaemon(Daemon):
   def run(self):
@@ -119,8 +120,10 @@ def cmd_host(args):
 
 def cmd_service(args):
   daemon = BatcherDaemon('/var/run/batcher/batcher.pid')
+  print "cmd_service> entered"
   if args.action == 'start':
     daemon.start()
+    print "cmd_service> daemon started"
     sys.exit(0)
   elif args.action == 'stop':
     daemon.stop()

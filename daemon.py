@@ -48,6 +48,7 @@ class Daemon:
     atexit.register(self.delpid)
     pid = str(os.getpid())
     file(self.pidfile, 'w+').write("%s\n" % pid)
+    
 
   def delpid(self):
     os.remove(self.pidfile)

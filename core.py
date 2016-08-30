@@ -110,7 +110,7 @@ def cmd_host(args):
     sys.exit(0)
   if args.add != None:
     print "HOST ADD"
-    host_add(args.add)
+    host_add(args.add,args.method,args.user)
     sys.exit(0)
   if args.delete != None:
     print "HOST DELETE"
@@ -208,9 +208,20 @@ def host_list():
     row = c.fetchone()
   conn.close()
 
-def host_add(hostname):
+def host_add(hostname,method,user):
+  if method == 'ssh':
+    accessType='ssh'
+    accessUser=user
+  elif method == 'local':
+    accessType='local'
+    accessUser='local'
+  else:
+    print "host_add> invalid access Type - %s" % method
+    sys.exit(1)
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
+  c.execute('INSERT INTO HOSTS (hostname, access, user) values (?, ?, ?)', (hostname, accessType,accessUser))
+  conn.commit()
   conn.close()
 
 def host_checkLoad(hostname):
@@ -264,6 +275,8 @@ if __name__ == "__main__":
   parser_host = subparsers.add_parser('host')
   parser_host.add_argument('-l', '--list',action='store_true')
   parser_host.add_argument('-a', '--add')
+  parser_host.add_argument('-m', '--method',default='ssh')
+  parser_host.add_argument('-u', '--user')
   parser_host.add_argument('-d', '--delete')
   parser_host.set_defaults(func=cmd_host)
 

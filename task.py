@@ -16,16 +16,22 @@ class TaskRunner:
     self.host = host
     self.cmd = cmd
 
-  def start(self, task):
+  def start(self):
     self.state="STARTING"
-    self.task=task
-    print "Starting task %s" % task 
-    if self.host != 'local':
-      command = "ssh %s@%s '%s'" % (
+    if self.host.method == 'ssh':
+      command = "ssh %s@%s '%s'" % ( self.host.user, self.host.name, self.cmd)
+    elif self.host.method == 'local':
+      command = self.cmd
+    else:
+      print "task method invalid"
+      sys.exit(1)
+    self.process = Popen(command,shell=True,stdout=PIPE,stderr=PIPE)
 
   def stop(self, taskID):
     self.state="STOPPING"
-    print "Stopping task %s %s" % (self.ID, self.task)
+
+  def complete(self):
+    self.state="COMPLETING"
 
 if __name__ == "__main__":
 

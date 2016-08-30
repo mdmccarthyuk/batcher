@@ -4,6 +4,7 @@ import sys, time, argparse, sqlite3, os
 from subprocess import Popen, PIPE
 from daemon import Daemon
 from task import TaskRunner
+from host import Host
 
 class BatcherDaemon(Daemon):
   def run(self):
@@ -11,15 +12,15 @@ class BatcherDaemon(Daemon):
     main(None)
 
 def main(args):
-  global taskList,taskStatus,checkRunning,checkResult,debugFlag,hostAccess,taskRunning
+  global taskStatus,checkRunning,checkResult,debugFlag,hostAccess,taskRunning,hostList,runningTasks
 
   if args.debug is True:
     debugFlag = True
     print "DEBUG"
 
+  runningTasks = dict()
   taskCount = 0
   taskMax = 1
-  taskList = dict()
   taskStatus = dict()
   taskRunning = dict()
   hostList = dict()
@@ -31,35 +32,39 @@ def main(args):
     print "main> Heartbeat"
 
     hosts = worker_getHosts()
+    worker_getTasks()
     for host in hosts:
       hostAccess[host[1]] = [ host[2], host[3] ]
-      host_checkLoad(host[1])
 
-    tasks = worker_getTasks()
-    for task in tasks:
-      print "main> task: %s %s - %s" % (task[0],taskStatus[task[0]],task[2])
-      if taskStatus[task[0]] == 'init':
+    for host in hostList:
+      print "HOST: %s = %s (%s)" % (host, hostList[host].name, hostList[host].method)
+      host_checkLoad(hostList[host].name)
+
+    completeTasks=[]
+    for task in runningTasks:
+      if runningTasks[task].state == 'INIT':
         if taskCount < taskMax:
           taskCount += 1
-          task_init(task[0],task[2],task[4])
+          runningTasks[task].start()
         else:
-          print "main> waiting for worker: %s" % task[0]
+          print "main> waiting for worker: %s" % task
       else:
-        if taskStatus[task[0]] == 'STARTED':
-          taskproc = taskRunning[task[0]]
+        if runningTasks[task].state == 'STARTING':
+          taskproc = runningTasks[task].process
           retcode = taskproc.poll()
           if retcode is not None:
-            print "main> task done %s (%s) - return: %s" % (task[0], task[2], retcode)
-            del taskRunning[task[0]]
-            taskStatus[task[0]]='DONE'
-            print "main> ----- STDOUT -----"
-            print taskproc.stdout.read()
-            print "main> ----- STDERR -----"
-            print taskproc.stderr.read()
-            print "main> ------------------"
             taskCount -= 1
-            task_done(task[0])
-       
+            print "%s --- STDOUT" % task
+            print taskproc.stdout.read()
+            print "%s --- STDERR" % task
+            print taskproc.stderr.read()
+            runningTasks[task].complete()
+            completeTasks.append(task)
+            task_done(task)
+
+    for task in completeTasks:
+      del runningTasks[task]
+
     time.sleep(5)    
 
 def check_for_db():
@@ -83,26 +88,29 @@ def worker_getHosts():
   row = c.fetchone()
   while row is not None:
     hosts.append(row)
+    print row[1]
+    if row[1] not in hostList:
+      newHost = Host(row[1])
+      if row[2] == 'ssh':
+        newHost.sshAccess(row[3])
+      hostList[row[1]]=newHost
     row = c.fetchone()
   conn.close()
   return hosts
 
 def worker_getTasks():
-  global taskList,taskStatus
+  global taskList,taskStatus,runningTasks
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
   sql = 'SELECT id,status,task,time,host,pid FROM tasks WHERE NOT status=\'DONE\''
   c.execute(sql)
-  tasks = []
   row = c.fetchone()
   while row is not None:
-    if row[0] not in taskList: 
-      taskList[row[0]] = row[2]
-      taskStatus[row[0]] = row[1]
-    tasks.append(row)
+    if row[0] not in runningTasks:
+      newTask=TaskRunner(row[2],hostList[row[4]])
+      runningTasks[row[0]]=newTask
     row = c.fetchone()
   conn.close()
-  return tasks
 
 def cmd_host(args):
   if args.list == True:
@@ -178,20 +186,6 @@ def task_add(task,host):
   c.execute('INSERT INTO tasks (status, task, host) values (\'init\', ?, ?)', (task, host,))
   conn.commit() 
   conn.close()  
-
-def task_init(task,cmd,host):
-  global taskStatus,taskRunning,hostAccess
-  if hostAccess[host][0] == "ssh":
-    command = "ssh %s@%s '%s'" % (hostAccess[host][1],host,cmd)
-  elif hostAccess[host][0] == "local":
-    command = cmd  
-  else:
-    print "task_init> hostAccess method invalid"
-    sys.exit(1)
-  print "task_init> task %s - %s starting" % (task, cmd)
-  taskRunning[task] = Popen(command,shell=True,stdout=PIPE,stderr=PIPE)
-  taskStatus[task] = "STARTED"
-  print "task_init> task %s - %s started" % (task, cmd)
 
 def task_done(task):
   conn = sqlite3.connect('/var/run/batcher/core.db')

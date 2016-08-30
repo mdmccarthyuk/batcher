@@ -44,18 +44,11 @@ def main(args):
         else:
           print "main> waiting for worker: %s" % task
       else:
-        if runningTasks[task].state == 'STARTING':
-          taskproc = runningTasks[task].process
-          retcode = taskproc.poll()
-          if retcode is not None:
-            taskCount -= 1
-            print "%s --- STDOUT" % task
-            print taskproc.stdout.read()
-            print "%s --- STDERR" % task
-            print taskproc.stderr.read()
-            runningTasks[task].complete()
-            completeTasks.append(task)
-            task_done(task)
+        runningTasks[task].transition()
+        if runningTasks[task].state == "COMPLETING":
+          completeTasks.append(task)
+          taskCount -= 1
+          task_done(task)
 
     for task in completeTasks:
       del runningTasks[task]

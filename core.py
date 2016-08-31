@@ -14,10 +14,6 @@ class BatcherDaemon(Daemon):
 def main(args):
   global checkRunning,checkResult,debugFlag,hostList,runningTasks
 
-  if args.debug is True:
-    debugFlag = True
-    print "DEBUG"
-
   runningTasks = dict()
   taskCount = 0
   taskMax = 3
@@ -126,6 +122,7 @@ def cmd_service(args):
   daemon = BatcherDaemon('/var/run/batcher/batcher.pid')
   print "cmd_service> entered"
   if args.action == 'start':
+    print "cmd_service> daemon starting"
     daemon.start()
     print "cmd_service> daemon started"
     sys.exit(0)
@@ -262,6 +259,7 @@ if __name__ == "__main__":
 
   parser_daemon = subparsers.add_parser('service')
   parser_daemon.add_argument('-k', '--action')
+  parser_daemon.add_argument('-d', '--debug',action='store_true')
   parser_daemon.set_defaults(func=cmd_service) 
  
   parser_host = subparsers.add_parser('host')

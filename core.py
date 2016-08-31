@@ -25,7 +25,15 @@ def main(args):
   checkRunning = dict()
   checkResult = dict()
 
-  while True:
+  print "Making FIFO"
+  if os.path.exists('/var/run/batcher/batcher'):
+    os.remove('/var/run/batcher/batcher')
+
+  os.mkfifo('/var/run/batcher/batcher')
+  pipeIn = os.open('/var/run/batcher/batcher', os.O_RDONLY|os.O_NONBLOCK)
+  pipeRead = ""
+
+  while pipeRead != "QUIT":
     print "main> Heartbeat"
 
     worker_getHosts()
@@ -52,7 +60,12 @@ def main(args):
     for task in completeTasks:
       del runningTasks[task]
 
-    time.sleep(5)    
+    time.sleep(5)
+    pipeRead = os.read(pipeIn,1024).strip()
+
+  print "Exiting";
+  os.close(pipeIn)
+  os.remove('/var/run/batcher/batcher')
 
 def check_for_db():
   conn = sqlite3.connect('/var/run/batcher/core.db')

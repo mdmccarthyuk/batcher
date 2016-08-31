@@ -7,6 +7,8 @@ class Host:
     self.name = name
     self.method = "local"
     self.loads = dict()
+    self.loads['load'] = 0.0
+    self.loads['iowait'] = 0
 
   def sshAccess(self,user):
     self.method = "ssh"

@@ -1,11 +1,8 @@
 #!/usr/bin/python
 
-import sys
-import time
-import threading
+import os, signal, threading, time, sys
 from subprocess import Popen, PIPE
 from host import Host
-
 
 class TaskRunner (threading.Thread):
 
@@ -28,8 +25,15 @@ class TaskRunner (threading.Thread):
     while self.state != "COMPLETE":
       self.transition()
       print "THREAD HEARTBEAT - %s" % self.state
-      if self.host.loads['load'] > 0.15:
+
+      if self.host.loads['load'] > 0.30:
         print "Task running on loaded host"
+        self.pauseTask()
+
+      if self.host.loads['load'] < 0.15:
+        if self.state == "PAUSED":
+          self.resumeTask()
+
       time.sleep(1)
 
   def startTask(self):
@@ -41,6 +45,7 @@ class TaskRunner (threading.Thread):
       print "task method invalid"
       sys.exit(1)
     self.process = Popen(command,shell=True,stdout=PIPE,stderr=PIPE)
+    print "PID: %s" % self.process.pid
 
   def transition(self):
     if self.state == "INIT":
@@ -67,8 +72,26 @@ class TaskRunner (threading.Thread):
     if self.state == "PAUSING":
       self.state = "PAUSED" 
 
+    if self.state == "RESUMING":
+      self.state = "RUNNING"
+
   def pauseTask(self):
     self.state="PAUSING"
+    if self.host.method == "local":
+      os.kill(self.process.pid, signal.SIGSTOP)
+    elif self.host.method == "ssh":
+      print "ssh: pause IOU"
+    else:
+      print "Invalid host method"
+
+  def resumeTask(self):
+    self.state="RESUMING"
+    if self.host.method == "local":
+      os.kill(self.process.pid, signal.SIGCONT)
+    elif self.host.method == "ssh":
+      print "ssh: resume IOU"
+    else:
+      print "Invalid host method"
 
   def stopTask(self):
     self.state="STOPPING"

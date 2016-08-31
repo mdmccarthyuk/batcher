@@ -6,6 +6,7 @@ class Host:
   def __init__(self,name):
     self.name = name
     self.method = "local"
+    self.loads = dict()
 
   def sshAccess(self,user):
     self.method = "ssh"

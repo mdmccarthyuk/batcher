@@ -20,7 +20,7 @@ def main(args):
 
   runningTasks = dict()
   taskCount = 0
-  taskMax = 1
+  taskMax = 3
   hostList = dict()
   checkRunning = dict()
   checkResult = dict()
@@ -44,7 +44,6 @@ def main(args):
         else:
           print "main> waiting for worker: %s" % task
       else:
-#        runningTasks[task].transition()
         if runningTasks[task].state in ["COMPLETING","COMPLETE"]:
           completeTasks.append(task)
           taskCount -= 1
@@ -228,10 +227,11 @@ def host_checkLoad(host):
       loads = lines[0].split()
       cpustat = lines[1].split()
       cpuTotal = eval("%s+%s+%s+%s+%s+%s+%s" % (cpustat[1],cpustat[2],cpustat[3],cpustat[4],cpustat[5],cpustat[6],cpustat[7]))
-      cpuWait = float(cpustat[5])/cpuTotal 
-      print "host_checkLoad> %s load is %s" % (host.name,loads[0])
-      print "host_checkLoad> %s IOWait is %s" % (host.name,cpuWait)
-      if float(loads[0]) > 0.10:
+      host.loads['iowait'] = float(cpustat[5])/cpuTotal
+      host.loads['load'] = float(loads[0])
+      print "host_checkLoad> %s load is %s" % (host.name,host.loads['load'])
+      print "host_checkLoad> %s IOWait is %s" % (host.name,host.loads['iowait'])
+      if float(host.loads['load']) > 0.10:
         print "host_checkLoad> %s load is over threshold" % host.name
     else:
       print "host_checkLoad> %s check still running" % host.name

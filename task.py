@@ -28,6 +28,8 @@ class TaskRunner (threading.Thread):
     while self.state != "COMPLETE":
       self.transition()
       print "THREAD HEARTBEAT - %s" % self.state
+      if self.host.loads['load'] > 0.15:
+        print "Task running on loaded host"
       time.sleep(1)
 
   def startTask(self):

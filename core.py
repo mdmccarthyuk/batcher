@@ -44,8 +44,8 @@ def main(args):
         else:
           print "main> waiting for worker: %s" % task
       else:
-        runningTasks[task].transition()
-        if runningTasks[task].state == "COMPLETING":
+#        runningTasks[task].transition()
+        if runningTasks[task].state in ["COMPLETING","COMPLETE"]:
           completeTasks.append(task)
           taskCount -= 1
           task_done(task)

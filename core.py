@@ -69,7 +69,7 @@ def check_for_db():
   c = conn.cursor()
   c.execute(sql)
   conn.commit()
-  sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER)'
+  sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER, monitor TEXT)'
   c.execute(sql)
   conn.commit()
   conn.close()
@@ -100,16 +100,19 @@ def worker_getTasks():
   global taskList,runningTasks
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  sql = 'SELECT id,status,task,time,host,pid FROM tasks WHERE NOT status=\'DONE\''
+  sql = 'SELECT id,status,task,time,host,pid,monitor FROM tasks WHERE NOT status=\'DONE\''
   c.execute(sql)
   row = c.fetchone()
   while row is not None:
     if row[0] not in runningTasks:
-      hostNames = row[4]
+      hostNames = row[6]
       hosts = hostNames.split(',')
-      newTask=TaskRunner(row[2])
+      newTask=TaskRunner(row[2],hostList[row[4]])
+      print hostNames
       for host in hosts:
-        newTask.addHost(hostList[host])
+        if host in hostList:
+          newTask.addMonitorHost(hostList[host])
+          # Add an error here for unknown hosts
       runningTasks[row[0]]=newTask
     row = c.fetchone()
   conn.close()
@@ -163,7 +166,7 @@ def cmd_task(args):
     if args.host == 'null':
       print "Host for task not specified"
       sys.exit(1)
-    task_add(args.add,args.host)
+    task_add(args.add,args.host,args.monitor)
     sys.exit(0)
 
 def cmd_worker(args):
@@ -192,10 +195,10 @@ def task_list():
     row = c.fetchone()
   conn.close()
 
-def task_add(task,host):
+def task_add(task,host,monitor):
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  c.execute('INSERT INTO tasks (status, task, host) values (\'init\', ?, ?)', (task, host,))
+  c.execute('INSERT INTO tasks (status, task, host, monitor) values (\'init\', ?, ?, ?)', (task, host, monitor,))
   conn.commit()
   conn.close()
 
@@ -229,7 +232,7 @@ def host_add(hostname,method,user):
     sys.exit(1)
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  c.execute('INSERT INTO HOSTS (hostname, access, user) values (?, ?, ?)', (hostname, accessType, accessUser))
+  c.execute('INSERT INTO HOSTS (hostname, access, user, limit_load, limit_iowait) values (?, ?, ?, 1.0, 50.0)', (hostname, accessType, accessUser))
   conn.commit()
   conn.close()
 
@@ -307,6 +310,7 @@ if __name__ == "__main__":
   parser_task = subparsers.add_parser('task')
   parser_task.add_argument('-l','--list',action='store_true')
   parser_task.add_argument('-H','--host',default="null")
+  parser_task.add_argument('-m','--monitor')
   parser_task.add_argument('-a','--add')
   parser_task.set_defaults(func=cmd_task)
 

@@ -13,23 +13,26 @@ class TaskRunner (threading.Thread):
     TaskRunner.nextTaskID+=1
     self.ID=TaskRunner.nextTaskID
     self.host = host
-    self.hosts = [ host ]
+    self.monitorHosts = []
     self.cmd = cmd
     threading.Thread.__init__(self)
 
   def run(self):
-    print "Starting thread"
+    print "Starting thread on host - %s" % self.host.name 
+    print "Monitoring on"
+    for host in self.monitorHosts:
+      print host.name
     self.runTask()
     print "Exiting thread"
 
-  def addHost(self,host):
-    self.hosts.append(host)
+  def addMonitorHost(self,host):
+    self.monitorHosts.append(host)
 
   def runTask(self):
     while self.state != "COMPLETE":
       self.transition()
       print "THREAD HEARTBEAT - %s" % self.state
-      for host in self.hosts:
+      for host in self.monitorHosts:
         if self.host.loads['load'] > self.host.limits['load']: 
           print "Task running on loaded host"
           self.pauseTask()

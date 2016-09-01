@@ -86,7 +86,13 @@ def worker_getHosts():
       newHost = Host(row[1])
       if row[2] == 'ssh':
         newHost.sshAccess(row[3])
+      newHost.limits['load']=float(row[4])
+      newHost.limits['iowait']=float(row[5])
       hostList[row[1]]=newHost
+    else:
+      hostList[row[1]].limits['load']=float(row[4])
+      hostList[row[1]].limits['iowait']=float(row[5])
+
     row = c.fetchone()
   conn.close()
 
@@ -99,7 +105,11 @@ def worker_getTasks():
   row = c.fetchone()
   while row is not None:
     if row[0] not in runningTasks:
-      newTask=TaskRunner(row[2],hostList[row[4]])
+      hostNames = row[4]
+      hosts = hostNames.split(',')
+      newTask=TaskRunner(row[2])
+      for host in hosts:
+        newTask.addHost(hostList[host])
       runningTasks[row[0]]=newTask
     row = c.fetchone()
   conn.close()
@@ -264,8 +274,6 @@ def host_checkLoad(host):
       host.loads['load'] = float(loads[0])
       print "host_checkLoad> %s load is %s" % (host.name,host.loads['load'])
       print "host_checkLoad> %s IOWait is %s" % (host.name,host.loads['iowait'])
-      if float(host.loads['load']) > 0.10:
-        print "host_checkLoad> %s load is over threshold" % host.name
     else:
       print "host_checkLoad> %s check still running" % host.name
 

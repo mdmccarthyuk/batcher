@@ -30,11 +30,11 @@ class TaskRunner (threading.Thread):
       self.transition()
       print "THREAD HEARTBEAT - %s" % self.state
       for host in self.hosts:
-        if self.host.loads['load'] > 0.30:
+        if self.host.loads['load'] > self.host.limits['load']: 
           print "Task running on loaded host"
           self.pauseTask()
 
-        if self.host.loads['load'] < 0.15:
+        if self.host.loads['load'] < self.host.limits['load']:
           if self.state == "PAUSED":
             self.resumeTask()
 

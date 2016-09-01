@@ -65,7 +65,7 @@ def main(args):
 
 def check_for_db():
   conn = sqlite3.connect('/var/run/batcher/core.db')
-  sql = 'create table if not exists hosts (id INTEGER PRIMARY KEY, hostname text, access text, user text)'
+  sql = 'create table if not exists hosts (id INTEGER PRIMARY KEY, hostname text, access text, user text, limit_load FLOAT, limit_iowait FLOAT)'
   c = conn.cursor()
   c.execute(sql)
   conn.commit()
@@ -108,6 +108,15 @@ def cmd_host(args):
   if args.list == True:
     print "HOST LIST"
     host_list()
+    sys.exit(0)
+  if args.limit != None:
+    if args.metric == None:
+      print "Missing --metric"
+      sys.exit(1)
+    if args.value == None:
+      print "Missing --value"
+      sys.exit(1)
+    host_limit(args.limit, args.metric, args.value)
     sys.exit(0)
   if args.add != None:
     print "HOST ADD"
@@ -210,7 +219,21 @@ def host_add(hostname,method,user):
     sys.exit(1)
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  c.execute('INSERT INTO HOSTS (hostname, access, user) values (?, ?, ?)', (hostname, accessType,accessUser))
+  c.execute('INSERT INTO HOSTS (hostname, access, user) values (?, ?, ?)', (hostname, accessType, accessUser))
+  conn.commit()
+  conn.close()
+
+def host_limit(hostname,limitName,limit):
+  allowedLimits = [ 'load', 'iowait' ]
+  if limitName not in allowedLimits:
+    print "Unknown limit name"
+    sys.exit(1)
+  else:
+    sqlLimit = "limit_" + limitName
+  conn = sqlite3.connect('/var/run/batcher/core.db')
+  c = conn.cursor()
+  print "%s %s %s" % (sqlLimit, limit, hostname)
+  c.execute("UPDATE hosts SET %s=%s WHERE hostname = ?" % (sqlLimit, limit), (hostname,))
   conn.commit()
   conn.close()
 
@@ -268,6 +291,9 @@ if __name__ == "__main__":
   parser_host.add_argument('-m', '--method',default='ssh')
   parser_host.add_argument('-u', '--user')
   parser_host.add_argument('-d', '--delete')
+  parser_host.add_argument('--limit')
+  parser_host.add_argument('--value')
+  parser_host.add_argument('--metric')
   parser_host.set_defaults(func=cmd_host)
 
   parser_task = subparsers.add_parser('task')

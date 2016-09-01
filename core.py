@@ -71,7 +71,7 @@ def check_for_db():
   conn.commit()
   sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER)'
   c.execute(sql)
-  conn.commit() 
+  conn.commit()
   conn.close()
 
 def worker_getHosts():
@@ -177,8 +177,8 @@ def task_add(task,host):
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
   c.execute('INSERT INTO tasks (status, task, host) values (\'init\', ?, ?)', (task, host,))
-  conn.commit() 
-  conn.close()  
+  conn.commit()
+  conn.close()
 
 def task_done(task):
   conn = sqlite3.connect('/var/run/batcher/core.db')
@@ -223,7 +223,7 @@ def host_checkLoad(host):
   else:
     print "host_checkLoad> Unknown access method"
     sys.exit(1)
-  
+
   if host.name not in checkRunning:
     print "host_checkLoad> %s check triggered" % host.name
     checkRunning[host.name]=Popen(command,stdout=PIPE,stderr=PIPE,shell=True)
@@ -260,8 +260,8 @@ if __name__ == "__main__":
   parser_daemon = subparsers.add_parser('service')
   parser_daemon.add_argument('-k', '--action')
   parser_daemon.add_argument('-d', '--debug',action='store_true')
-  parser_daemon.set_defaults(func=cmd_service) 
- 
+  parser_daemon.set_defaults(func=cmd_service)
+
   parser_host = subparsers.add_parser('host')
   parser_host.add_argument('-l', '--list',action='store_true')
   parser_host.add_argument('-a', '--add')
@@ -284,4 +284,3 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
   args.func(args)
-

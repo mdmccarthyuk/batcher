@@ -13,6 +13,7 @@ class TaskRunner (threading.Thread):
     TaskRunner.nextTaskID+=1
     self.ID=TaskRunner.nextTaskID
     self.host = host
+    self.hosts = [ host ]
     self.cmd = cmd
     threading.Thread.__init__(self)
 
@@ -20,6 +21,9 @@ class TaskRunner (threading.Thread):
     print "Starting thread"
     self.runTask()
     print "Exiting thread"
+
+  def addHost(self,host)
+    self.hosts.append(host)
 
   def runTask(self):
     while self.state != "COMPLETE":
@@ -70,7 +74,7 @@ class TaskRunner (threading.Thread):
         print "-----------------------"
 
     if self.state == "PAUSING":
-      self.state = "PAUSED" 
+      self.state = "PAUSED"
 
     if self.state == "RESUMING":
       self.state = "RUNNING"
@@ -102,4 +106,3 @@ class TaskRunner (threading.Thread):
 if __name__ == "__main__":
 
   sys.exit(0)
-

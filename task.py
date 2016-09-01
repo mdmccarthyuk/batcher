@@ -22,7 +22,7 @@ class TaskRunner (threading.Thread):
     self.runTask()
     print "Exiting thread"
 
-  def addHost(self,host)
+  def addHost(self,host):
     self.hosts.append(host)
 
   def runTask(self):

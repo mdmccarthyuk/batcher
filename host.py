@@ -12,6 +12,8 @@ class Host:
     self.loads['iowait'] = 0
     self.limits['load'] = 1.0
     self.limits['iowait'] = 50.0
+    self.lastCpuStat = []
+    self.lastCpuTotal = 0
 
   def sshAccess(self,user):
     self.method = "ssh"

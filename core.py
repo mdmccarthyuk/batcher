@@ -21,6 +21,9 @@ def main(args):
   checkRunning = dict()
   checkResult = dict()
 
+  if not os.path.exists('/var/run/batcher'):
+    os.mkdir('/var/run/batcher')
+
   print "Making FIFO"
   if os.path.exists('/var/run/batcher/batcher'):
     os.remove('/var/run/batcher/batcher')
@@ -271,9 +274,22 @@ def host_checkLoad(host):
       del checkRunning[host.name]
       lines = checkResult[host.name].split('\n')
       loads = lines[0].split()
-      cpustat = lines[1].split()
-      cpuTotal = eval("%s+%s+%s+%s+%s+%s+%s" % (cpustat[1],cpustat[2],cpustat[3],cpustat[4],cpustat[5],cpustat[6],cpustat[7]))
-      host.loads['iowait'] = float(cpustat[5])/cpuTotal
+      cpuStat = lines[1].split()
+      cpuTotal = 0
+      del(cpuStat[0])
+      for cpuVal in cpuStat:
+        cpuTotal += int(cpuVal)
+      if len(host.lastCpuStat):
+        deltaTotal = cpuTotal - host.lastCpuTotal
+        deltaWait = int(cpuStat[4]) - int(host.lastCpuStat[4])
+        print "%s %s %s %s" % (deltaTotal, deltaWait, cpuStat[4], host.lastCpuStat[4])
+        host.loads['iowait'] = float(deltaWait)/float(deltaTotal)
+      else:
+        host.loads['iowait'] = 0.0
+      host.lastCpuStat = cpuStat
+      host.lastCpuTotal = 0
+      for cpuVal in host.lastCpuStat:
+        host.lastCpuTotal += int(cpuVal)
       host.loads['load'] = float(loads[0])
       print "host_checkLoad> %s load is %s" % (host.name,host.loads['load'])
       print "host_checkLoad> %s IOWait is %s" % (host.name,host.loads['iowait'])

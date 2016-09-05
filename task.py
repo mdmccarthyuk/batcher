@@ -13,6 +13,7 @@ class TaskRunner (threading.Thread):
     TaskRunner.nextTaskID+=1
     self.ID=TaskRunner.nextTaskID
     self.killable = False
+    self.loaded = False
     self.host = host
     self.monitorHosts = []
     self.cmd = cmd
@@ -33,14 +34,17 @@ class TaskRunner (threading.Thread):
     while self.state != "COMPLETE":
       self.transition()
       print "THREAD HEARTBEAT - %s" % self.state
+      self.loaded = False
       for host in self.monitorHosts:
-        if self.host.loads['load'] > self.host.limits['load']: 
-          print "Task running on loaded host"
-          self.pauseTask()
+        for load in self.host.loads:
+          if self.host.loads[load] > self.host.limits[load]:
+            self.loaded = True
+            print "Task running on loaded host"
 
-        if self.host.loads['load'] < self.host.limits['load']:
-          if self.state == "PAUSED":
-            self.resumeTask()
+        if self.state == "PAUSED" and self.loaded == False:
+          self.resumeTask()
+        if self.state == "RUNNING" and self.loaded == True:
+          self.pauseTask()
 
       time.sleep(1)
 

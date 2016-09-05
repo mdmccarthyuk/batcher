@@ -114,7 +114,7 @@ def worker_getTasks():
   global taskList,runningTasks
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  sql = 'SELECT id,status,task,time,host,pid,monitor FROM tasks WHERE NOT status=\'DONE\''
+  sql = 'SELECT id,status,task,time,host,pid,monitor,killable FROM tasks WHERE NOT status=\'DONE\''
   c.execute(sql)
   row = c.fetchone()
   while row is not None:
@@ -122,6 +122,9 @@ def worker_getTasks():
       hostNames = row[6]
       hosts = hostNames.split(',')
       newTask=TaskRunner(row[2],hostList[row[4]])
+      if row[7] == 1:
+        print "KILLABLE"
+        newTask.killable=True
       print hostNames
       for host in hosts:
         if host in hostList:

@@ -90,7 +90,10 @@ class TaskRunner (threading.Thread):
   def pauseTask(self):
     self.state="PAUSING"
     if self.host.method == "local":
-      os.kill(self.process.pid, signal.SIGSTOP)
+      if self.killable:
+        os.kill(self.process.pid, signal.SIGTERM)
+      else:
+        os.kill(self.process.pid, signal.SIGSTOP)
     elif self.host.method == "ssh":
       print "ssh: pause IOU"
     else:
@@ -99,7 +102,10 @@ class TaskRunner (threading.Thread):
   def resumeTask(self):
     self.state="RESUMING"
     if self.host.method == "local":
-      os.kill(self.process.pid, signal.SIGCONT)
+      if self.killable:
+        self.startTask()
+      else:
+        os.kill(self.process.pid, signal.SIGCONT)
     elif self.host.method == "ssh":
       print "ssh: resume IOU"
     else:

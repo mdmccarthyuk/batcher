@@ -83,7 +83,7 @@ def check_for_db():
   c = conn.cursor()
   c.execute(sql)
   conn.commit()
-  sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER, monitor TEXT)'
+  sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER, monitor TEXT, killable INTEGER)'
   c.execute(sql)
   conn.commit()
   conn.close()
@@ -180,7 +180,7 @@ def cmd_task(args):
     if args.host == 'null':
       print "Host for task not specified"
       sys.exit(1)
-    task_add(args.add,args.host,args.monitor)
+    task_add(args.add,args.host,args.monitor,args.killable)
     sys.exit(0)
 
 def cmd_worker(args):
@@ -209,10 +209,14 @@ def task_list():
     row = c.fetchone()
   conn.close()
 
-def task_add(task,host,monitor):
+def task_add(task,host,monitor,killable):
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  c.execute('INSERT INTO tasks (status, task, host, monitor) values (\'init\', ?, ?, ?)', (task, host, monitor,))
+  killVal = 0
+  if killable:
+    killVal=1
+  
+  c.execute('INSERT INTO tasks (status, task, host, monitor, killable) values (\'init\', ?, ?, ?, ?)', (task, host, monitor, killVal,))
   conn.commit()
   conn.close()
 

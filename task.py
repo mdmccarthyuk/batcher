@@ -12,6 +12,7 @@ class TaskRunner (threading.Thread):
     self.state="INIT"
     TaskRunner.nextTaskID+=1
     self.ID=TaskRunner.nextTaskID
+    self.killable = False
     self.host = host
     self.monitorHosts = []
     self.cmd = cmd

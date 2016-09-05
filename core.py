@@ -14,6 +14,12 @@ class BatcherDaemon(Daemon):
 def main(args):
   global checkRunning,checkResult,debugFlag,hostList,runningTasks
 
+  if args.kill == True:
+    pipeOut = os.open('/var/run/batcher/batcher', os.O_RDWR)
+    os.write(pipeOut,"QUIT")
+    os.close(pipeOut)
+    sys.exit(0)
+
   runningTasks = dict()
   taskCount = 0
   taskMax = 3
@@ -62,6 +68,11 @@ def main(args):
   print "Exiting";
   os.close(pipeIn)
   os.remove('/var/run/batcher/batcher')
+  conn = sqlite3.connect('/var/run/batcher/core.db')
+  c = conn.cursor()
+  c.execute('delete from tasks where status=\'DONE\'')
+  conn.commit()
+  conn.close()
 
 def check_for_db():
   conn = sqlite3.connect('/var/run/batcher/core.db')
@@ -289,6 +300,7 @@ if __name__ == "__main__":
 
   parser_standalone = subparsers.add_parser('standalone')
   parser_standalone.add_argument('-d', '--debug',action='store_true')
+  parser_standalone.add_argument('-k', '--kill',action='store_true')
   parser_standalone.set_defaults(func=main)
 
   parser_daemon = subparsers.add_parser('service')
@@ -312,6 +324,7 @@ if __name__ == "__main__":
   parser_task.add_argument('-H','--host',default="null")
   parser_task.add_argument('-m','--monitor')
   parser_task.add_argument('-a','--add')
+  parser_task.add_argument('-k','--killable')
   parser_task.set_defaults(func=cmd_task)
 
   parser_worker = subparsers.add_parser('worker')

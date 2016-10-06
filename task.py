@@ -33,7 +33,7 @@ class TaskRunner (threading.Thread):
   def runTask(self):
     while self.state != "COMPLETE":
       self.transition()
-      print "THREAD HEARTBEAT - %s" % self.state
+      print "THREAD %s HEARTBEAT - %s" % (self.ID,self.state)
       self.loaded = False
       for host in self.monitorHosts:
         for load in self.host.loads:
@@ -110,6 +110,10 @@ class TaskRunner (threading.Thread):
       print "ssh: resume IOU"
     else:
       print "Invalid host method"
+
+  def killTask(self):
+    self.killable=True
+    self.pauseTask()
 
   def stopTask(self):
     self.state="STOPPING"

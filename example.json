@@ -1,0 +1,65 @@
+{
+  "batcherConfig": {
+    "core": {
+      "maxTasks": 2
+    },
+    "job": {
+      "hosts": [
+        {
+          "name": "dev01",
+          "type": "local",
+          "user": "null",
+          "metrics": {
+            "iowait": 50,
+            "load": 1.0
+          }
+        }
+      ],
+      "tasks": [
+        {
+          "command": "rsync -r --progress /data/src/db1 /data/dst/db1",
+          "priority": 1,
+          "host": "dev01",
+          "monitor": "dev01",
+          "killable": 0
+        },
+        {
+          "command": "rsync -r --progress /data/src/db1 /data/dst/db2",
+          "priority": 2,
+          "host": "dev01",
+          "monitor": "dev01",
+          "killable": 0
+        },
+        {
+          "command": "rsync -r --progress /data/src/db1 /data/dst/db3",
+          "priority": 3,
+          "host": "dev01",
+          "monitor": "dev01",
+          "killable": 0
+        },
+        {
+          "command": "rsync -r --progress /data/src/db1 /data/dst/db4",
+          "priority": 4,
+          "host": "dev01",
+          "monitor": "dev01",
+          "killable": 0
+        },
+        {
+          "command": "rsync -r --progress /data/src/db1 /data/dst/db5",
+          "priority": 5,
+          "host": "dev01",
+          "monitor": "dev01",
+          "killable": 0
+        },
+        {
+          "command": "rsync -r --progress /data/src/db1 /data/dst/db6",
+          "priority": 6,
+          "host": "dev01",
+          "monitor": "dev01",
+          "killable": 0
+        }
+      ]
+    }
+  }
+}
+

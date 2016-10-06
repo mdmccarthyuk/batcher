@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, time, argparse, sqlite3, os
+import sys, time, argparse, sqlite3, os, json
 from subprocess import Popen, PIPE
 from daemon import Daemon
 from task import TaskRunner
@@ -14,18 +14,29 @@ class BatcherDaemon(Daemon):
 def main(args):
   global checkRunning,checkResult,debugFlag,hostList,runningTasks
 
+  runningTasks = dict()
+  taskCount = 0
+  hostList = dict()
+  checkRunning = dict()
+  checkResult = dict()
+
+  worker_getHosts()
+  worker_getTasks()
+
+  if args.nuke == True:
+#    args.kill = True
+    for task in runningTasks:
+      task_done(task)
+      if runningTasks[task].state == "RUNNING":
+        runningTasks[task].stopTask()
+        runningTasks[task].killTask()
+    sys.exit(0)
+      
   if args.kill == True:
     pipeOut = os.open('/var/run/batcher/batcher', os.O_RDWR)
     os.write(pipeOut,"QUIT")
     os.close(pipeOut)
     sys.exit(0)
-
-  runningTasks = dict()
-  taskCount = 0
-  taskMax = 3
-  hostList = dict()
-  checkRunning = dict()
-  checkResult = dict()
 
   if not os.path.exists('/var/run/batcher'):
     os.mkdir('/var/run/batcher')
@@ -37,6 +48,25 @@ def main(args):
   os.mkfifo('/var/run/batcher/batcher')
   pipeIn = os.open('/var/run/batcher/batcher', os.O_RDONLY|os.O_NONBLOCK)
   pipeRead = ""
+
+  if args.file is not None:
+    print "Parsing "+args.file
+    with open(args.file) as jobFile:
+      configuration = json.load(jobFile)
+    taskMax = configuration['batcherConfig']['core']['maxTasks']
+    for confTask in configuration['batcherConfig']['job']['tasks']:
+      print confTask['command']
+      killableFlag = False
+      if confTask['killable'] == 1:
+        killableFlag = True
+      task_add(confTask['command'],confTask['host'],confTask['monitor'],killableFlag)
+    for confHost in configuration['batcherConfig']['job']['hosts']:
+      if confHost['name'] not in hostList:
+        host_add(confHost['name'],confHost['type'],confHost['user']);
+      for limit in confHost['metrics']:
+        host_limit(confHost['name'],limit,confHost['metrics'][limit])
+  else:
+    taskMax = 1
 
   while pipeRead != "QUIT":
     print "main> Heartbeat"
@@ -324,6 +354,8 @@ if __name__ == "__main__":
   parser_standalone = subparsers.add_parser('standalone')
   parser_standalone.add_argument('-d', '--debug',action='store_true')
   parser_standalone.add_argument('-k', '--kill',action='store_true')
+  parser_standalone.add_argument('-n', '--nuke',action='store_true')
+  parser_standalone.add_argument('-f', '--file')
   parser_standalone.set_defaults(func=main)
 
   parser_daemon = subparsers.add_parser('service')

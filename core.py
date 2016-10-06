@@ -19,6 +19,7 @@ def main(args):
   hostList = dict()
   checkRunning = dict()
   checkResult = dict()
+  tickCount = 0
 
   worker_getHosts()
   worker_getTasks()
@@ -59,7 +60,7 @@ def main(args):
       killableFlag = False
       if confTask['killable'] == 1:
         killableFlag = True
-      task_add(confTask['command'],confTask['host'],confTask['monitor'],killableFlag)
+      task_add(confTask['command'],confTask['host'],confTask['monitor'],killableFlag,confTask['priority'])
     for confHost in configuration['batcherConfig']['job']['hosts']:
       if confHost['name'] not in hostList:
         host_add(confHost['name'],confHost['type'],confHost['user']);
@@ -69,7 +70,7 @@ def main(args):
     taskMax = 1
 
   while pipeRead != "QUIT":
-    print "main> Heartbeat"
+    print "main> Heartbeat %s " % (tickCount)
 
     worker_getHosts()
     worker_getTasks()
@@ -96,6 +97,7 @@ def main(args):
       del runningTasks[task]
 
     time.sleep(5)
+    tickCount += 1
     pipeRead = os.read(pipeIn,1024).strip()
 
   print "Exiting";
@@ -113,7 +115,7 @@ def check_for_db():
   c = conn.cursor()
   c.execute(sql)
   conn.commit()
-  sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER, monitor TEXT, killable INTEGER)'
+  sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER, monitor TEXT, killable INTEGER, priority INTEGER)'
   c.execute(sql)
   conn.commit()
   conn.close()
@@ -213,7 +215,7 @@ def cmd_task(args):
     if args.host == 'null':
       print "Host for task not specified"
       sys.exit(1)
-    task_add(args.add,args.host,args.monitor,args.killable)
+    task_add(args.add,args.host,args.monitor,args.killable,args.priority)
     sys.exit(0)
 
 def cmd_worker(args):
@@ -242,14 +244,13 @@ def task_list():
     row = c.fetchone()
   conn.close()
 
-def task_add(task,host,monitor,killable):
+def task_add(task,host,monitor,killable,priority):
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
   killVal = 0
   if killable:
     killVal=1
-  
-  c.execute('INSERT INTO tasks (status, task, host, monitor, killable) values (\'init\', ?, ?, ?, ?)', (task, host, monitor, killVal,))
+  c.execute('INSERT INTO tasks (status, task, host, monitor, killable, priority) values (\'init\', ?, ?, ?, ?, ?)', (task, host, monitor, killVal,priority))
   conn.commit()
   conn.close()
 
@@ -380,6 +381,7 @@ if __name__ == "__main__":
   parser_task.add_argument('-m','--monitor')
   parser_task.add_argument('-a','--add')
   parser_task.add_argument('-k','--killable')
+  parser_task.add_argument('-p','--priority',default=100)
   parser_task.set_defaults(func=cmd_task)
 
   parser_worker = subparsers.add_parser('worker')

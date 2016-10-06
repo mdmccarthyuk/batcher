@@ -7,6 +7,8 @@ from host import Host
 class TaskRunner (threading.Thread):
 
   nextTaskID = 0
+  lastPriority = 100
+  lastChangeTick = 0
 
   def __init__(self,cmd,host):
     self.state="INIT"
@@ -17,6 +19,7 @@ class TaskRunner (threading.Thread):
     self.host = host
     self.monitorHosts = []
     self.cmd = cmd
+    self.priority = 100
     threading.Thread.__init__(self)
 
   def run(self):

@@ -9,9 +9,11 @@ class TaskRunner (threading.Thread):
   nextTaskID = 0
   lastPriority = 100
   lastChangeTick = 0
+  lastTick = 0
 
   def __init__(self,cmd,host):
     self.state="INIT"
+    self.lastState="INIT"
     TaskRunner.nextTaskID+=1
     self.ID=TaskRunner.nextTaskID
     self.killable = False
@@ -36,18 +38,21 @@ class TaskRunner (threading.Thread):
   def runTask(self):
     while self.state != "COMPLETE":
       self.transition()
-      print "THREAD %s HEARTBEAT - %s" % (self.ID,self.state)
+#      print "THREAD %s HEARTBEAT - %s" % (self.ID,self.state)
       self.loaded = False
       for host in self.monitorHosts:
         for load in self.host.loads:
           if self.host.loads[load] > self.host.limits[load]:
             self.loaded = True
-            print "Task running on loaded host"
+#            print "Task running on loaded host"
 
-        if self.state == "PAUSED" and self.loaded == False:
-          self.resumeTask()
-        if self.state == "RUNNING" and self.loaded == True:
-          self.pauseTask()
+        if (TaskRunner.lastTick - TaskRunner.lastChangeTick) >= 3:
+          if self.state == "PAUSED" and self.loaded == False:
+            self.resumeTask()
+          if self.state == "RUNNING" and self.loaded == True:
+            self.pauseTask()
+          TaskRunner.lastChangeTick = TaskRunner.lastTick
+          print "State change window reached"
 
       time.sleep(1)
 
@@ -63,6 +68,7 @@ class TaskRunner (threading.Thread):
     print "PID: %s" % self.process.pid
 
   def transition(self):
+    self.lastState=self.state
     if self.state == "INIT":
       self.startTask()
       self.state = "STARTING"
@@ -89,6 +95,9 @@ class TaskRunner (threading.Thread):
 
     if self.state == "RESUMING":
       self.state = "RUNNING"
+
+    if self.state != self.lastState:
+      print "THREAD STATE CHANGE - %s WAS %s IS %s" % (self.ID,self.lastState,self.state)
 
   def pauseTask(self):
     self.state="PAUSING"

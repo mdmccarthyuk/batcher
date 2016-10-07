@@ -98,6 +98,7 @@ def main(args):
 
     time.sleep(5)
     tickCount += 1
+    TaskRunner.lastTick = tickCount
     pipeRead = os.read(pipeIn,1024).strip()
 
   print "Exiting";

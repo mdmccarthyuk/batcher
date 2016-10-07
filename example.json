@@ -1,7 +1,7 @@
 {
   "batcherConfig": {
     "core": {
-      "maxTasks": 2
+      "maxTasks": 3
     },
     "job": {
       "hosts": [

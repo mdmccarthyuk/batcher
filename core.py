@@ -76,7 +76,7 @@ def main(args):
     worker_getTasks()
 
     for host in hostList:
-      print "HOST: %s = %s (%s)" % (host, hostList[host].name, hostList[host].method)
+#      print "HOST: %s = %s (%s)" % (host, hostList[host].name, hostList[host].method)
       host_checkLoad(hostList[host])
 
     completeTasks=[]
@@ -85,8 +85,8 @@ def main(args):
         if taskCount < taskMax:
           taskCount += 1
           runningTasks[task].start()
-        else:
-          print "main> waiting for worker: %s" % task
+#        else:
+#          print "main> waiting for worker: %s" % task
       else:
         if runningTasks[task].state in ["COMPLETING","COMPLETE"]:
           completeTasks.append(task)
@@ -314,7 +314,7 @@ def host_checkLoad(host):
     sys.exit(1)
 
   if host.name not in checkRunning:
-    print "host_checkLoad> %s check triggered" % host.name
+#    print "host_checkLoad> %s check triggered" % host.name
     checkRunning[host.name]=Popen(command,stdout=PIPE,stderr=PIPE,shell=True)
   else:
     taskproc = checkRunning[host.name]
@@ -332,7 +332,7 @@ def host_checkLoad(host):
       if len(host.lastCpuStat):
         deltaTotal = cpuTotal - host.lastCpuTotal
         deltaWait = int(cpuStat[4]) - int(host.lastCpuStat[4])
-        print "%s %s %s %s" % (deltaTotal, deltaWait, cpuStat[4], host.lastCpuStat[4])
+#        print "%s %s %s %s" % (deltaTotal, deltaWait, cpuStat[4], host.lastCpuStat[4])
         host.loads['iowait'] = float(deltaWait)/float(deltaTotal)
       else:
         host.loads['iowait'] = 0.0

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, time, argparse, sqlite3, os, json
+import sys, time, argparse, sqlite3, os, json, syslog
 from subprocess import Popen, PIPE
 from daemon import Daemon
 from task import TaskRunner
@@ -156,7 +156,7 @@ def worker_getTasks():
   global taskList,runningTasks
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  sql = 'SELECT id,status,task,time,host,pid,monitor,killable FROM tasks WHERE NOT status=\'DONE\''
+  sql = 'SELECT id,status,task,time,host,pid,monitor,killable,priority FROM tasks WHERE NOT status=\'DONE\''
   c.execute(sql)
   row = c.fetchone()
   while row is not None:
@@ -172,6 +172,7 @@ def worker_getTasks():
         if host in hostList:
           newTask.addMonitorHost(hostList[host])
           # Add an error here for unknown hosts
+      newTask.priority = row[8]
       runningTasks[row[0]]=newTask
     row = c.fetchone()
   conn.close()

@@ -1,10 +1,17 @@
 #!/usr/bin/python
 
-import os, signal, threading, time, sys
+import os
+import signal
+import threading
+import time
+import sys
+import syslog
 from subprocess import Popen, PIPE
 from host import Host
 
 class TaskRunner (threading.Thread):
+
+  syslog.openlog('batcher')
 
   nextTaskID = 0
   lastPriority = 100
@@ -26,13 +33,9 @@ class TaskRunner (threading.Thread):
     threading.Thread.__init__(self)
 
   def run(self):
-    print "Starting thread on host - %s" % self.host.name 
-    print "Command - %s" % self.cmd
-    print "Monitoring on"
-    for host in self.monitorHosts:
-      print host.name
+    syslog.syslog("Thread start - ID=%s host=%s command=\"%s\" monitoring=%s priority=%s" % (self.ID, self.host.name, self.cmd, self.monitorHosts, self.priority))
     self.runTask()
-    print "Exiting thread"
+    syslog.syslog("Thread end - ID=%s host=%s command=\"%s\" priority=%s" % (self.ID, self.host.name, self.cmd, self.priority))
 
   def addMonitorHost(self,host):
     self.monitorHosts.append(host)
@@ -55,7 +58,7 @@ class TaskRunner (threading.Thread):
             if self.state == "RUNNING" and self.loaded == True:
               self.pauseTask()
           TaskRunner.lastChangeTick = TaskRunner.lastTick
-          print "State change window reached"
+#          print "State change window reached"
 
       time.sleep(1)
 
@@ -85,13 +88,24 @@ class TaskRunner (threading.Thread):
     if self.state == "RUNNING":
       taskproc = self.process
       retcode = taskproc.poll()
+      while True:
+        line = taskproc.stdout.readline()
+        if not line:
+          break
+        message = "Thread stdout - ID=%s output=\"%s\"" % (self.ID,line)
+        syslog.syslog(message)
+        print message
+
+      while True:
+        line = taskproc.stderr.readline()
+        if not line:
+          break
+        message = "Thread stderr - ID=%s output=\"%s\"" % (self.ID,line)
+        syslog.syslog(message)
+        print message
+
       if retcode is not None:
         self.completeTask()
-        print "------STDOUT [%s]------" % self.ID
-        print taskproc.stdout.read()
-        print "------STDERR [%s]------" % self.ID
-        print taskproc.stderr.read()
-        print "-----------------------"
 
     if self.state == "PAUSING":
       self.state = "PAUSED"
@@ -100,7 +114,9 @@ class TaskRunner (threading.Thread):
       self.state = "RUNNING"
 
     if self.state != self.lastState:
-      print "THREAD STATE CHANGE - %s WAS %s IS %s" % (self.ID,self.lastState,self.state)
+      message = "Thread transition - ID=%s old_state=%s new_state=%s" % (self.ID,self.lastState,self.state)
+      print message
+      syslog.syslog(message)
 
   def pauseTask(self):
     self.state="PAUSING"

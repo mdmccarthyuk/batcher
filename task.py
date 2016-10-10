@@ -26,6 +26,7 @@ class TaskRunner (threading.Thread):
 
   def run(self):
     print "Starting thread on host - %s" % self.host.name 
+    print "Command - %s" % self.cmd
     print "Monitoring on"
     for host in self.monitorHosts:
       print host.name

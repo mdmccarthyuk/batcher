@@ -60,6 +60,9 @@ def main(args):
       killableFlag = False
       if confTask['killable'] == 1:
         killableFlag = True
+      if confTask['priority'] > 100:
+        print "ERROR> Step priority can't be greater than 100"
+        sys.exit(1)
       task_add(confTask['command'],confTask['host'],confTask['monitor'],killableFlag,confTask['priority'])
     for confHost in configuration['batcherConfig']['job']['hosts']:
       if confHost['name'] not in hostList:
@@ -80,18 +83,22 @@ def main(args):
       host_checkLoad(hostList[host])
 
     completeTasks=[]
+    lowestPriority = 101
+    for task in runningTasks:
+      if runningTasks[task].priority < lowestPriority:
+        lowestPriority = runningTasks[task].priority
+
     for task in runningTasks:
       if runningTasks[task].state == 'INIT':
-        if taskCount < taskMax:
-          taskCount += 1
-          runningTasks[task].start()
-#        else:
-#          print "main> waiting for worker: %s" % task
-      else:
-        if runningTasks[task].state in ["COMPLETING","COMPLETE"]:
-          completeTasks.append(task)
-          taskCount -= 1
-          task_done(task)
+        if runningTasks[task].priority == lowestPriority:
+          lowestPriority = runningTasks[task].priority
+          if taskCount < taskMax:
+            taskCount += 1
+            runningTasks[task].start()
+      if runningTasks[task].state in ["COMPLETING","COMPLETE"]:
+        completeTasks.append(task)
+        taskCount -= 1
+        task_done(task)
 
     for task in completeTasks:
       del runningTasks[task]
@@ -156,7 +163,7 @@ def worker_getTasks():
       hosts = hostNames.split(',')
       newTask=TaskRunner(row[2],hostList[row[4]])
       if row[7] == 1:
-        print "KILLABLE"
+#        print "KILLABLE"
         newTask.killable=True
       print hostNames
       for host in hosts:
@@ -248,9 +255,7 @@ def task_list():
 def task_add(task,host,monitor,killable,priority):
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  killVal = 0
-  if killable:
-    killVal=1
+  killVal = 1 if killable else 0
   c.execute('INSERT INTO tasks (status, task, host, monitor, killable, priority) values (\'init\', ?, ?, ?, ?, ?)', (task, host, monitor, killVal,priority))
   conn.commit()
   conn.close()

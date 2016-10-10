@@ -8,6 +8,7 @@ class TaskRunner (threading.Thread):
 
   nextTaskID = 0
   lastPriority = 100
+  highestPriority = 101
   lastChangeTick = 0
   lastTick = 0
 
@@ -50,8 +51,9 @@ class TaskRunner (threading.Thread):
         if (TaskRunner.lastTick - TaskRunner.lastChangeTick) >= 3:
           if self.state == "PAUSED" and self.loaded == False:
             self.resumeTask()
-          if self.state == "RUNNING" and self.loaded == True:
-            self.pauseTask()
+          if (TaskRunner.highestPriority == self.priority):
+            if self.state == "RUNNING" and self.loaded == True:
+              self.pauseTask()
           TaskRunner.lastChangeTick = TaskRunner.lastTick
           print "State change window reached"
 

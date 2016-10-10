@@ -87,6 +87,8 @@ def main(args):
     for task in runningTasks:
       if runningTasks[task].priority < lowestPriority:
         lowestPriority = runningTasks[task].priority
+      if runningTasks[task].priority > TaskRunner.highestPriority:
+        TaskRunner.highestPriority = runningTasks[task].priority
 
     for task in runningTasks:
       if runningTasks[task].state == 'INIT':

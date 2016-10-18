@@ -70,10 +70,10 @@ def main(args):
       for limit in confHost['metrics']:
         host_limit(confHost['name'],limit,confHost['metrics'][limit])
   else:
-    taskMax = 1
+    taskMax = 2
 
   while pipeRead != "QUIT":
-    print "main> Heartbeat %s " % (tickCount)
+    print "main> Heartbeat %s (Tasks %s/%s) " % (tickCount,taskCount,taskMax)
 
     worker_getHosts()
     worker_getTasks()
@@ -86,9 +86,13 @@ def main(args):
     lowestPriority = 101
     for task in runningTasks:
       if runningTasks[task].priority < lowestPriority:
-        lowestPriority = runningTasks[task].priority
+        if runningTasks[task].state == 'INIT':
+          lowestPriority = runningTasks[task].priority
       if runningTasks[task].priority > TaskRunner.highestPriority:
         TaskRunner.highestPriority = runningTasks[task].priority
+
+#    print "lowest = %s " % lowestPriority
+#    print "highest = %s " % TaskRunner.highestPriority
 
     for task in runningTasks:
       if runningTasks[task].state == 'INIT':
@@ -97,6 +101,8 @@ def main(args):
           if taskCount < taskMax:
             taskCount += 1
             runningTasks[task].start()
+#        else: 
+#          print "Priority not equal %s %s" % (lowestPriority,TaskRunner.highestPriority)
       if runningTasks[task].state in ["COMPLETING","COMPLETE"]:
         completeTasks.append(task)
         taskCount -= 1

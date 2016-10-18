@@ -8,6 +8,8 @@ import sys
 import syslog
 from subprocess import Popen, PIPE
 from host import Host
+from Queue import Queue,Empty
+from stream import StreamReader
 
 class TaskRunner (threading.Thread):
 
@@ -71,7 +73,9 @@ class TaskRunner (threading.Thread):
       print "task method invalid"
       sys.exit(1)
     self.process = Popen(command,shell=True,stdout=PIPE,stderr=PIPE)
-    print "PID: %s" % self.process.pid
+    self.streamOut = StreamReader(self.process.stdout)
+    self.streamErr = StreamReader(self.process.stderr)
+#    print "PID: %s" % self.process.pid
 
   def transition(self):
     self.lastState=self.state
@@ -89,20 +93,20 @@ class TaskRunner (threading.Thread):
       taskproc = self.process
       retcode = taskproc.poll()
       while True:
-        line = taskproc.stdout.readline()
+        line = self.streamOut.readline(0.1)
         if not line:
           break
         message = "Thread stdout - ID=%s output=\"%s\"" % (self.ID,line)
         syslog.syslog(message)
-        print message
+#        print message
 
       while True:
-        line = taskproc.stderr.readline()
+        line = self.streamErr.readline(0.1)
         if not line:
           break
         message = "Thread stderr - ID=%s output=\"%s\"" % (self.ID,line)
         syslog.syslog(message)
-        print message
+#        print message
 
       if retcode is not None:
         self.completeTask()

@@ -14,7 +14,7 @@ class StreamReader:
         if line:
           q.put(line)
         else:
-          raise UnexpectedEndOfStream
+          break
     self.thread = Thread(target = _populateQueue, args = (self.stream, self.queue))
     self.thread.daemon = True
     self.thread.start()

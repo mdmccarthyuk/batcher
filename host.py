@@ -8,10 +8,13 @@ class Host:
     self.method = "local"
     self.limits = dict()
     self.loads = dict()
+    self.lowerLimits = dict()
     self.loads['load'] = 0.0
     self.loads['iowait'] = 0
     self.limits['load'] = 1.0
-    self.limits['iowait'] = 50.0
+    self.limits['iowait'] = 0.5
+    self.lowerLimits['load'] = 1.0
+    self.lowerLimits['iowait'] = 0.5
     self.lastCpuStat = []
     self.lastCpuTotal = 0
 

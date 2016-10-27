@@ -10,8 +10,29 @@
           "type": "local",
           "user": "null",
           "metrics": {
-            "iowait": 50,
-            "load": 1.0
+            "upper": {
+              "iowait": 0.5,
+              "load": 1.0
+            },
+            "lower": {
+              "iowait": 0.25,
+              "load": 0.5
+            }
+          }
+        },
+        {
+          "name": "dev02",
+          "type": "ssh",
+          "user": "mikmcc",
+          "metrics": {
+            "upper": {
+              "iowait": 0.5,
+              "load": 2.0
+            },
+            "lower": {
+              "iowait": 0.25,
+              "load": 0.5
+            }
           }
         }
       ],

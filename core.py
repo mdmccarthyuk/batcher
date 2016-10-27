@@ -25,7 +25,6 @@ def main(args):
   worker_getTasks()
 
   if args.nuke == True:
-#    args.kill = True
     for task in runningTasks:
       task_done(task)
       if runningTasks[task].state == "RUNNING":
@@ -56,7 +55,6 @@ def main(args):
       configuration = json.load(jobFile)
     taskMax = configuration['batcherConfig']['core']['maxTasks']
     for confTask in configuration['batcherConfig']['job']['tasks']:
-      print confTask['command']
       killableFlag = False
       if confTask['killable'] == 1:
         killableFlag = True
@@ -67,42 +65,51 @@ def main(args):
     for confHost in configuration['batcherConfig']['job']['hosts']:
       if confHost['name'] not in hostList:
         host_add(confHost['name'],confHost['type'],confHost['user']);
-      for limit in confHost['metrics']:
-        host_limit(confHost['name'],limit,confHost['metrics'][limit])
+      for limit in confHost['metrics']['upper']:
+        host_limit(confHost['name'],limit,confHost['metrics']['upper'][limit],False)
+      for limit in confHost['metrics']['lower']:
+        host_limit(confHost['name'],limit,confHost['metrics']['lower'][limit],True)
   else:
     taskMax = 2
 
   while pipeRead != "QUIT":
-    print "main> Heartbeat %s (Tasks %s/%s) " % (tickCount,taskCount,taskMax)
+#    print "main> Heartbeat %s (Tasks %s/%s) " % (tickCount,taskCount,taskMax)
 
     worker_getHosts()
     worker_getTasks()
 
     for host in hostList:
-#      print "HOST: %s = %s (%s)" % (host, hostList[host].name, hostList[host].method)
       host_checkLoad(hostList[host])
 
     completeTasks=[]
     lowestPriority = 101
+    nextLowestPriority = 101
+    newHighestPriority = 0 
+    newLowestPausedPriority = 101
+
     for task in runningTasks:
       if runningTasks[task].priority < lowestPriority:
-        if runningTasks[task].state == 'INIT':
-          lowestPriority = runningTasks[task].priority
-      if runningTasks[task].priority > TaskRunner.highestPriority:
-        TaskRunner.highestPriority = runningTasks[task].priority
-
-#    print "lowest = %s " % lowestPriority
-#    print "highest = %s " % TaskRunner.highestPriority
+        lowestPriority = runningTasks[task].priority
+      if runningTasks[task].state == 'INIT':
+        if runningTasks[task].priority < nextLowestPriority:
+          nextLowestPriority = runningTasks[task].priority
+      if runningTasks[task].priority > newHighestPriority:
+        if runningTasks[task].state == 'RUNNING':
+          newHighestPriority = runningTasks[task].priority
+      if runningTasks[task].state == 'PAUSED':
+         if runningTasks[task].priority < newLowestPausedPriority:
+           newLowestPausedPriority = runningTasks[task].priority
+    
+    TaskRunner.highestPriority = newHighestPriority
+    TaskRunner.lowestPausedPriority = newLowestPausedPriority
 
     for task in runningTasks:
       if runningTasks[task].state == 'INIT':
-        if runningTasks[task].priority == lowestPriority:
-          lowestPriority = runningTasks[task].priority
+        if runningTasks[task].priority == nextLowestPriority:
+          lowestRunningPriority = runningTasks[task].priority
           if taskCount < taskMax:
             taskCount += 1
             runningTasks[task].start()
-#        else: 
-#          print "Priority not equal %s %s" % (lowestPriority,TaskRunner.highestPriority)
       if runningTasks[task].state in ["COMPLETING","COMPLETE"]:
         completeTasks.append(task)
         taskCount -= 1
@@ -127,7 +134,7 @@ def main(args):
 
 def check_for_db():
   conn = sqlite3.connect('/var/run/batcher/core.db')
-  sql = 'create table if not exists hosts (id INTEGER PRIMARY KEY, hostname text, access text, user text, limit_load FLOAT, limit_iowait FLOAT)'
+  sql = 'create table if not exists hosts (id INTEGER PRIMARY KEY, hostname text, access text, user text, limit_load FLOAT, limit_iowait FLOAT, lower_load FLOAT, lower_iowait FLOAT)'
   c = conn.cursor()
   c.execute(sql)
   conn.commit()
@@ -150,16 +157,20 @@ def worker_getHosts():
         newHost.sshAccess(row[3])
       newHost.limits['load']=float(row[4])
       newHost.limits['iowait']=float(row[5])
+      newHost.lowerLimits['load']=float(row[6])
+      newHost.lowerLimits['iowait']=float(row[7])
       hostList[row[1]]=newHost
     else:
       hostList[row[1]].limits['load']=float(row[4])
       hostList[row[1]].limits['iowait']=float(row[5])
+      hostList[row[1]].lowerLimits['load']=float(row[6])
+      hostList[row[1]].lowerLimits['iowait']=float(row[7])
 
     row = c.fetchone()
   conn.close()
 
 def worker_getTasks():
-  global taskList,runningTasks
+  global taskList,runningTasks,hostList
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
   sql = 'SELECT id,status,task,time,host,pid,monitor,killable,priority FROM tasks WHERE NOT status=\'DONE\''
@@ -171,9 +182,7 @@ def worker_getTasks():
       hosts = hostNames.split(',')
       newTask=TaskRunner(row[2],hostList[row[4]])
       if row[7] == 1:
-#        print "KILLABLE"
         newTask.killable=True
-      print hostNames
       for host in hosts:
         if host in hostList:
           newTask.addMonitorHost(hostList[host])
@@ -197,6 +206,14 @@ def cmd_host(args):
       sys.exit(1)
     host_limit(args.limit, args.metric, args.value)
     sys.exit(0)
+  if args.lowerlimit != None:
+    if args.metric == None:
+      print "Missing --metric"
+      sys.exit(1)
+    if args.value == None:
+      print "Missing --value"
+      sys.exit(1)
+    host_lowerLimit(args.lowerlimit, args.metric, args.value)
   if args.add != None:
     print "HOST ADD"
     host_add(args.add,args.method,args.user)
@@ -299,17 +316,22 @@ def host_add(hostname,method,user):
     sys.exit(1)
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  c.execute('INSERT INTO HOSTS (hostname, access, user, limit_load, limit_iowait) values (?, ?, ?, 1.0, 50.0)', (hostname, accessType, accessUser))
+  c.execute('INSERT INTO HOSTS (hostname, access, user, limit_load, limit_iowait, lower_load, lower_iowait) values (?, ?, ?, 1.0, 0.5, 1.0, 0.5)', (hostname, accessType, accessUser))
   conn.commit()
   conn.close()
 
-def host_limit(hostname,limitName,limit):
+def host_limit(hostname,limitName,limit,isLower):
   allowedLimits = [ 'load', 'iowait' ]
+  if isLower:
+    prefix="lower_"
+  else:
+    prefix="limit_"
+  checkName = prefix+limitName
   if limitName not in allowedLimits:
     print "Unknown limit name"
     sys.exit(1)
   else:
-    sqlLimit = "limit_" + limitName
+    sqlLimit = prefix + limitName
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
   print "%s %s %s" % (sqlLimit, limit, hostname)
@@ -355,8 +377,8 @@ def host_checkLoad(host):
       for cpuVal in host.lastCpuStat:
         host.lastCpuTotal += int(cpuVal)
       host.loads['load'] = float(loads[0])
-      print "host_checkLoad> %s load is %s" % (host.name,host.loads['load'])
-      print "host_checkLoad> %s IOWait is %s" % (host.name,host.loads['iowait'])
+#      print "host_checkLoad> %s load is %s Limits %s %s" % (host.name,host.loads['load'],host.limits['load'],host.lowerLimits['load'])
+#      print "host_checkLoad> %s IOWait is %s" % (host.name,host.loads['iowait'])
     else:
       print "host_checkLoad> %s check still running" % host.name
 
@@ -386,6 +408,7 @@ if __name__ == "__main__":
   parser_host.add_argument('-u', '--user')
   parser_host.add_argument('-d', '--delete')
   parser_host.add_argument('--limit')
+  parser_host.add_argument('--lowerlimit')
   parser_host.add_argument('--value')
   parser_host.add_argument('--metric')
   parser_host.set_defaults(func=cmd_host)

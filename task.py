@@ -17,9 +17,10 @@ class TaskRunner (threading.Thread):
 
   nextTaskID = 0
   lastPriority = 100
-  highestPriority = 101
-  lastChangeTick = 0
+  lowestPausedPriority = 100
+  highestPriority = 1
   lastTick = 0
+  lastAllChangeTick = 0
 
   def __init__(self,cmd,host):
     self.state="INIT"
@@ -28,14 +29,18 @@ class TaskRunner (threading.Thread):
     self.ID=TaskRunner.nextTaskID
     self.killable = False
     self.loaded = False
+    self.underLimit = False
     self.host = host
     self.monitorHosts = []
     self.cmd = cmd
     self.priority = 100
     threading.Thread.__init__(self)
+    self.lastChangeTick = 0
 
   def run(self):
-    syslog.syslog("Thread start - ID=%s host=%s command=\"%s\" monitoring=%s priority=%s" % (self.ID, self.host.name, self.cmd, self.monitorHosts, self.priority))
+    message = "Thread start - ID=%s host=%s command=\"%s\" monitoring=%s priority=%s" % (self.ID, self.host.name, self.cmd, self.monitorHosts, self.priority)
+    print message
+    syslog.syslog(message)
     self.runTask()
     syslog.syslog("Thread end - ID=%s host=%s command=\"%s\" priority=%s" % (self.ID, self.host.name, self.cmd, self.priority))
 
@@ -45,22 +50,33 @@ class TaskRunner (threading.Thread):
   def runTask(self):
     while self.state != "COMPLETE":
       self.transition()
-#      print "THREAD %s HEARTBEAT - %s" % (self.ID,self.state)
+#      print "THREAD %s HEARTBEAT - %s priority %s" % (self.ID,self.state,self.priority)
       self.loaded = False
+      self.underLimit = True
       for host in self.monitorHosts:
+#        print host.name
         for load in self.host.loads:
-          if self.host.loads[load] > self.host.limits[load]:
+          if host.loads[load] > host.limits[load]:
             self.loaded = True
-#            print "Task running on loaded host"
+          if host.loads[load] > host.lowerLimits[load]:
+            self.underLimit = False
+#            print "Task running on loaded host %s" % self.loaded
 
-        if (TaskRunner.lastTick - TaskRunner.lastChangeTick) >= 3:
-          if self.state == "PAUSED" and self.loaded == False:
+      if (TaskRunner.lastTick - TaskRunner.lastAllChangeTick) >= 1:
+        if self.state == "PAUSED" and self.underLimit == True:
+          if TaskRunner.lowestPausedPriority == self.priority:
             self.resumeTask()
-          if (TaskRunner.highestPriority == self.priority):
-            if self.state == "RUNNING" and self.loaded == True:
-              self.pauseTask()
-          TaskRunner.lastChangeTick = TaskRunner.lastTick
-#          print "State change window reached"
+            TaskRunner.lastAllChangeTick = TaskRunner.lastTick
+        if (TaskRunner.highestPriority == self.priority):
+          if self.state == "RUNNING" and self.loaded == True:
+            self.pauseTask()
+            TaskRunner.lastAllChangeTick = TaskRunner.lastTick
+#          else:
+#            print "PAUSE CHECK %s %s %s" % (self.state,self.loaded,self.ID)
+#        else:
+#          print "PRIORITY: Highest: %s Priority: %s ID: %s" % (TaskRunner.highestPriority, self.priority, self.ID)
+        self.lastChangeTick = TaskRunner.lastTick
+#        print "Thread %s State change window reached - current state %s" % (self.ID,self.state)
 
       time.sleep(1)
 
@@ -92,13 +108,29 @@ class TaskRunner (threading.Thread):
     if self.state == "RUNNING":
       taskproc = self.process
       retcode = taskproc.poll()
+#      while True:
+#        line = taskproc.stdout.readline()
+#        if line == '':
+#          break
+#        message = "Thread stdout - ID=%s output=\"%s\"" % (self.ID,line)
+#        syslog.syslog(message)
+#        print message
+
+#      while True:
+#        line = taskproc.stderr.readline()
+#        if line == '':
+#          break
+#        message = "Thread stderr - ID=%s output=\"%s\"" % (self.ID,line)
+#        syslog.syslog(message)
+#        print message
+
       while True:
         line = self.streamOut.readline(0.1)
         if not line:
           break
         message = "Thread stdout - ID=%s output=\"%s\"" % (self.ID,line)
         syslog.syslog(message)
-#        print message
+        print message
 
       while True:
         line = self.streamErr.readline(0.1)
@@ -106,7 +138,7 @@ class TaskRunner (threading.Thread):
           break
         message = "Thread stderr - ID=%s output=\"%s\"" % (self.ID,line)
         syslog.syslog(message)
-#        print message
+        print message
 
       if retcode is not None:
         self.completeTask()

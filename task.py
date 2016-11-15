@@ -36,6 +36,7 @@ class TaskRunner (threading.Thread):
     self.priority = 100
     threading.Thread.__init__(self)
     self.lastChangeTick = 0
+    self.remoteRunAs = "DEFAULT"
 
   def run(self):
     message = "Thread start - ID=%s host=%s command=\"%s\" monitoring=%s priority=%s" % (self.ID, self.host.name, self.cmd, self.monitorHosts, self.priority)
@@ -82,7 +83,11 @@ class TaskRunner (threading.Thread):
 
   def startTask(self):
     if self.host.method == 'ssh':
-      command = "ssh %s@%s '%s'" % ( self.host.user, self.host.name, self.cmd)
+      if self.remoteRunAs == 'DEFAULT':
+        taskUser = self.host.user
+      else:
+        taskUser = self.remoteRunAs
+      command = "ssh %s@%s '%s'" % ( taskUser, self.host.name, self.cmd)
     elif self.host.method == 'local':
       command = self.cmd
     else:

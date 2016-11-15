@@ -61,7 +61,11 @@ def main(args):
       if confTask['priority'] > 100:
         print "ERROR> Step priority can't be greater than 100"
         sys.exit(1)
-      task_add(confTask['command'],confTask['host'],confTask['monitor'],killableFlag,confTask['priority'])
+      if 'sshuser' in confTask:
+        newTaskUser = confTask['sshuser']
+      else:
+        newTaskUser = 'DEFAULT'
+      task_add(confTask['command'],confTask['host'],confTask['monitor'],killableFlag,confTask['priority'],newTaskUser)
     for confHost in configuration['batcherConfig']['job']['hosts']:
       if confHost['name'] not in hostList:
         host_add(confHost['name'],confHost['type'],confHost['user']);
@@ -86,6 +90,7 @@ def main(args):
     nextLowestPriority = 101
     newHighestPriority = 0 
     newLowestPausedPriority = 101
+    pausedTasks = False
 
     for task in runningTasks:
       if runningTasks[task].priority < lowestPriority:
@@ -97,6 +102,7 @@ def main(args):
         if runningTasks[task].state == 'RUNNING':
           newHighestPriority = runningTasks[task].priority
       if runningTasks[task].state == 'PAUSED':
+         pausedTasks = True
          if runningTasks[task].priority < newLowestPausedPriority:
            newLowestPausedPriority = runningTasks[task].priority
     
@@ -107,9 +113,10 @@ def main(args):
       if runningTasks[task].state == 'INIT':
         if runningTasks[task].priority == nextLowestPriority:
           lowestRunningPriority = runningTasks[task].priority
-          if taskCount < taskMax:
-            taskCount += 1
-            runningTasks[task].start()
+          if not pausedTasks:
+            if taskCount < taskMax:
+              taskCount += 1
+              runningTasks[task].start()
       if runningTasks[task].state in ["COMPLETING","COMPLETE"]:
         completeTasks.append(task)
         taskCount -= 1
@@ -122,6 +129,9 @@ def main(args):
     tickCount += 1
     TaskRunner.lastTick = tickCount
     pipeRead = os.read(pipeIn,1024).strip()
+    if len(runningTasks) == 0 and tickCount > 1:
+      pipeRead="QUIT"
+      print "All tasks completed"
 
   print "Exiting";
   os.close(pipeIn)
@@ -138,7 +148,7 @@ def check_for_db():
   c = conn.cursor()
   c.execute(sql)
   conn.commit()
-  sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER, monitor TEXT, killable INTEGER, priority INTEGER)'
+  sql = 'create table if not exists tasks (id INTEGER PRIMARY KEY, status text, task text, time text, host text, pid INTEGER, monitor TEXT, killable INTEGER, priority INTEGER, sshuser text)'
   c.execute(sql)
   conn.commit()
   conn.close()
@@ -173,7 +183,7 @@ def worker_getTasks():
   global taskList,runningTasks,hostList
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
-  sql = 'SELECT id,status,task,time,host,pid,monitor,killable,priority FROM tasks WHERE NOT status=\'DONE\''
+  sql = 'SELECT id,status,task,time,host,pid,monitor,killable,priority,sshuser FROM tasks WHERE NOT status=\'DONE\''
   c.execute(sql)
   row = c.fetchone()
   while row is not None:
@@ -188,6 +198,7 @@ def worker_getTasks():
           newTask.addMonitorHost(hostList[host])
           # Add an error here for unknown hosts
       newTask.priority = row[8]
+      newTask.remoteRunAs = row[9]
       runningTasks[row[0]]=newTask
     row = c.fetchone()
   conn.close()
@@ -249,7 +260,7 @@ def cmd_task(args):
     if args.host == 'null':
       print "Host for task not specified"
       sys.exit(1)
-    task_add(args.add,args.host,args.monitor,args.killable,args.priority)
+    task_add(args.add,args.host,args.monitor,args.killable,args.priority,'DEFAULT')
     sys.exit(0)
 
 def cmd_worker(args):
@@ -278,11 +289,11 @@ def task_list():
     row = c.fetchone()
   conn.close()
 
-def task_add(task,host,monitor,killable,priority):
+def task_add(task,host,monitor,killable,priority,sshuser):
   conn = sqlite3.connect('/var/run/batcher/core.db')
   c = conn.cursor()
   killVal = 1 if killable else 0
-  c.execute('INSERT INTO tasks (status, task, host, monitor, killable, priority) values (\'init\', ?, ?, ?, ?, ?)', (task, host, monitor, killVal,priority))
+  c.execute('INSERT INTO tasks (status, task, host, monitor, killable, priority, sshuser) values (\'init\', ?, ?, ?, ?, ?, ?)', (task, host, monitor, killVal,priority,sshuser))
   conn.commit()
   conn.close()
 

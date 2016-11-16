@@ -87,7 +87,7 @@ class TaskRunner (threading.Thread):
         taskUser = self.host.user
       else:
         taskUser = self.remoteRunAs
-      command = "ssh %s@%s '%s'" % ( taskUser, self.host.name, self.cmd)
+      command = "ssh -t -t %s@%s '%s'" % ( taskUser, self.host.name, self.cmd)
     elif self.host.method == 'local':
       command = self.cmd
     else:
@@ -167,7 +167,10 @@ class TaskRunner (threading.Thread):
       else:
         os.kill(self.process.pid, signal.SIGSTOP)
     elif self.host.method == "ssh":
-      print "ssh: pause IOU"
+      if self.killable:
+        os.kill(self.process.pid, signal.SIGTERM)
+      else: 
+        print "ssh: pause not implemented"
     else:
       print "Invalid host method"
 
@@ -179,7 +182,10 @@ class TaskRunner (threading.Thread):
       else:
         os.kill(self.process.pid, signal.SIGCONT)
     elif self.host.method == "ssh":
-      print "ssh: resume IOU"
+      if self.killable:
+        self.startTask()
+      else:
+        print "ssh: resume not implemented"
     else:
       print "Invalid host method"
 

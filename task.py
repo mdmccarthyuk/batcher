@@ -51,12 +51,12 @@ class TaskRunner (threading.Thread):
   def runTask(self):
     while self.state != "COMPLETE":
       self.transition()
-#      print "THREAD %s HEARTBEAT - %s priority %s" % (self.ID,self.state,self.priority)
+      print "THREAD %s HEARTBEAT - %s priority %s" % (self.ID,self.state,self.priority)
       self.loaded = False
       self.underLimit = True
       for host in self.monitorHosts:
 #        print host.name
-        for load in self.host.loads:
+        for load in host.loads:
           if host.loads[load] > host.limits[load]:
             self.loaded = True
           if host.loads[load] > host.lowerLimits[load]:
@@ -87,16 +87,18 @@ class TaskRunner (threading.Thread):
         taskUser = self.host.user
       else:
         taskUser = self.remoteRunAs
-      command = "ssh -t -t %s@%s '%s'" % ( taskUser, self.host.name, self.cmd)
+      command = "ssh -t %s@%s 'stty -echo -onlcr; %s; stty echo onlcr'" % ( taskUser, self.host.name, self.cmd)
     elif self.host.method == 'local':
       command = self.cmd
     else:
       print "task method invalid"
       sys.exit(1)
+    print "Starting streams"
     self.process = Popen(command,shell=True,stdout=PIPE,stderr=PIPE)
     self.streamOut = StreamReader(self.process.stdout)
     self.streamErr = StreamReader(self.process.stderr)
-#    print "PID: %s" % self.process.pid
+    print "PID: %s" % self.process.pid
+    os.system('stty sane')
 
   def transition(self):
     self.lastState=self.state
@@ -113,9 +115,10 @@ class TaskRunner (threading.Thread):
     if self.state == "RUNNING":
       taskproc = self.process
       retcode = taskproc.poll()
+
 #      while True:
 #        line = taskproc.stdout.readline()
-#        if line == '':
+#        if not line:
 #          break
 #        message = "Thread stdout - ID=%s output=\"%s\"" % (self.ID,line)
 #        syslog.syslog(message)
@@ -123,7 +126,7 @@ class TaskRunner (threading.Thread):
 
 #      while True:
 #        line = taskproc.stderr.readline()
-#        if line == '':
+#        if not line:
 #          break
 #        message = "Thread stderr - ID=%s output=\"%s\"" % (self.ID,line)
 #        syslog.syslog(message)

@@ -12,7 +12,7 @@ class BatcherDaemon(Daemon):
     main(None)
 
 def main(args):
-  global checkRunning,checkResult,debugFlag,hostList,runningTasks
+  global checkRunning,checkResult,debugFlag,hostList,runningTasks,abortFlag
 
   runningTasks = dict()
   taskCount = 0
@@ -20,6 +20,7 @@ def main(args):
   checkRunning = dict()
   checkResult = dict()
   tickCount = 0
+  abortFlag = False
 
   worker_getHosts()
   worker_getTasks()
@@ -73,6 +74,7 @@ def main(args):
         host_limit(confHost['name'],limit,confHost['metrics']['upper'][limit],False)
       for limit in confHost['metrics']['lower']:
         host_limit(confHost['name'],limit,confHost['metrics']['lower'][limit],True)
+      host_limit(confHost['name'],'abort',confHost['metrics']['abort']['load'],False)
   else:
     taskMax = 2
 
@@ -133,6 +135,16 @@ def main(args):
       pipeRead="QUIT"
       print "All tasks completed"
 
+    if abortFlag:
+      print "ABORTING"
+      pipeRead="QUIT"
+      for task in runningTasks:
+        if runningTasks[task].state == "RUNNING":
+          runningTasks[task].killTask()
+          runningTasks[task].transition()
+        runningTasks[task].completeTask()
+        runningTasks[task].transition()
+
   print "Exiting";
   os.close(pipeIn)
   os.remove('/var/run/batcher/batcher')
@@ -144,7 +156,7 @@ def main(args):
 
 def check_for_db():
   conn = sqlite3.connect('/var/run/batcher/core.db')
-  sql = 'create table if not exists hosts (id INTEGER PRIMARY KEY, hostname text, access text, user text, limit_load FLOAT, limit_iowait FLOAT, lower_load FLOAT, lower_iowait FLOAT)'
+  sql = 'create table if not exists hosts (id INTEGER PRIMARY KEY, hostname text, access text, user text, limit_load FLOAT, limit_iowait FLOAT, lower_load FLOAT, lower_iowait FLOAT, limit_abort FLOAT)'
   c = conn.cursor()
   c.execute(sql)
   conn.commit()
@@ -169,12 +181,14 @@ def worker_getHosts():
       newHost.limits['iowait']=float(row[5])
       newHost.lowerLimits['load']=float(row[6])
       newHost.lowerLimits['iowait']=float(row[7])
+      newHost.abort=float(row[8])
       hostList[row[1]]=newHost
     else:
       hostList[row[1]].limits['load']=float(row[4])
       hostList[row[1]].limits['iowait']=float(row[5])
       hostList[row[1]].lowerLimits['load']=float(row[6])
       hostList[row[1]].lowerLimits['iowait']=float(row[7])
+      hostList[row[1]].abort=float(row[8])
 
     row = c.fetchone()
   conn.close()
@@ -196,7 +210,9 @@ def worker_getTasks():
       for host in hosts:
         if host in hostList:
           newTask.addMonitorHost(hostList[host])
-          # Add an error here for unknown hosts
+	else:
+          print "ERROR - Unknown monitor host %s" % host
+          sys.exit(0)
       newTask.priority = row[8]
       newTask.remoteRunAs = row[9]
       runningTasks[row[0]]=newTask
@@ -332,14 +348,14 @@ def host_add(hostname,method,user):
   conn.close()
 
 def host_limit(hostname,limitName,limit,isLower):
-  allowedLimits = [ 'load', 'iowait' ]
+  allowedLimits = [ 'load', 'iowait', 'abort' ]
   if isLower:
     prefix="lower_"
   else:
     prefix="limit_"
   checkName = prefix+limitName
   if limitName not in allowedLimits:
-    print "Unknown limit name"
+    print "Unknown limit name %s" % limitName
     sys.exit(1)
   else:
     sqlLimit = prefix + limitName
@@ -351,7 +367,7 @@ def host_limit(hostname,limitName,limit,isLower):
   conn.close()
 
 def host_checkLoad(host):
-  global checkRunning,checkResult
+  global checkRunning,checkResult,abortFlag
   if host.method == "ssh":
     command = "ssh %s@%s 'cat /proc/loadavg /proc/stat'" % (host.user,host.name)
   elif host.method == "local":
@@ -388,10 +404,14 @@ def host_checkLoad(host):
       for cpuVal in host.lastCpuStat:
         host.lastCpuTotal += int(cpuVal)
       host.loads['load'] = float(loads[0])
-#      print "host_checkLoad> %s load is %s Limits %s %s" % (host.name,host.loads['load'],host.limits['load'],host.lowerLimits['load'])
-#      print "host_checkLoad> %s IOWait is %s" % (host.name,host.loads['iowait'])
+      print "host_checkLoad> %s load is %s Limits %s %s" % (host.name,host.loads['load'],host.limits['load'],host.lowerLimits['load'])
+      print "host_checkLoad> %s IOWait is %s" % (host.name,host.loads['iowait'])
     else:
       print "host_checkLoad> %s check still running" % host.name
+    print host.abort
+    if host.loads['load'] > host.abort:
+      abortFlag=True
+      print "Abort flag set due to host %s" % host.name
 
 if __name__ == "__main__":
   workerStatus="START"

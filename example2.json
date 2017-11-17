@@ -23,54 +23,39 @@
               "load": 10.0
             }
           }
-        },
-        {
-          "name": "dev02",
-          "type": "ssh",
-          "user": "mikmcc",
-          "metrics": {
-            "upper": {
-              "iowait": 0.5,
-              "load": 2.0
-            },
-            "lower": {
-              "iowait": 0.25,
-              "load": 0.5
-            }
-          }
         }
       ],
       "tasks": [
         {
-          "command": "rsync -r --progress /data/src/db1 /data/dst/db1",
+          "command": "sleep 10",
           "priority": 10,
           "host": "dev01",
           "monitor": "dev01",
           "killable": 0
         },
         {
-          "command": "rsync -r --progress /data/src/db1 /data/dst/db2",
+          "command": "sleep 10",
           "priority": 2,
           "host": "dev01",
           "monitor": "dev01",
           "killable": 0
         },
         {
-          "command": "rsync -r --progress /data/src/db1 /data/dst/db3",
+          "command": "sleep 10",
           "priority": 3,
           "host": "dev01",
           "monitor": "dev01",
           "killable": 0
         },
         {
-          "command": "rsync -r --progress /data/src/db1 /data/dst/db4",
+          "command": "sleep 10",
           "priority": 4,
           "host": "dev01",
           "monitor": "dev01",
           "killable": 0
         },
         {
-          "command": "rsync -r --progress /data/src/db1 /data/dst/db5",
+          "command": "sleep 10",
           "priority": 1,
           "host": "dev01",
           "monitor": "dev01",

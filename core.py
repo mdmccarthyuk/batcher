@@ -37,8 +37,8 @@ def main(args):
         for task in running_tasks:
             task_done(task)
             if running_tasks[task].state == "RUNNING":
-                running_tasks[task].stopTask()
-                running_tasks[task].killTask()
+                running_tasks[task].stop_task()
+                running_tasks[task].kill_task()
         sys.exit(0)
 
     if args.kill:
@@ -148,9 +148,9 @@ def main(args):
             pipe_read = "QUIT"
             for task in running_tasks:
                 if running_tasks[task].state == "RUNNING":
-                    running_tasks[task].killTask()
+                    running_tasks[task].kill_task()
                     running_tasks[task].transition()
-                running_tasks[task].completeTask()
+                running_tasks[task].complete_task()
                 running_tasks[task].transition()
 
     print("Exiting")
@@ -222,7 +222,7 @@ def worker_get_tasks():
                 new_task.killable = True
             for host in hosts:
                 if host in host_list:
-                    new_task.addMonitorHost(host_list[host])
+                    new_task.add_monitor_host(host_list[host])
                 else:
                     print("ERROR - Unknown monitor host %s" % host)
                     sys.exit(0)
